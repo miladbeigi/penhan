@@ -19,15 +19,24 @@ help: ## Show this help message
 ci: fmt vet lint test build tidy ## Run all CI checks
 
 fmt: ## Check code formatting
+	@test -z "$$(gofmt -l .)" || (gofmt -d . && exit 1)
 
 vet: ## Run go vet
+	go vet ./...
 
 lint: ## Run golangci-lint
+	golangci-lint run
 
 test: ## Run tests
+	go test ./...
 
 build: ## Build binary
+	go build -ldflags "$(LDFLAGS)" -o penhan ./cmd/penhan
 
 tidy: ## Check go mod tidy
+	go mod tidy
+	@git diff --exit-code go.mod
+	@test ! -f go.sum || git diff --exit-code go.sum
 
 release: ## Run GoReleaser to create a release
+	goreleaser release --clean
