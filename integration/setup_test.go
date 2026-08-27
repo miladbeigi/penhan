@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 import (
@@ -15,11 +17,14 @@ import (
 )
 
 const (
-	vaultAddr       = "http://127.0.0.1:8200"
-	vaultToken      = "penhan-test-token"
-	mountPath       = "secret"
-	vaultContainer  = "penhan-vault"
-	vaultImage      = "hashicorp/vault:1.17"
+	// vaultAddr is the address of the test Vault as seen from the host
+	// (docker-compose maps host port 18200 to avoid clashing with a local Vault on 8200).
+	vaultAddr = "http://127.0.0.1:18200"
+	// vaultInContainerAddr is the address used when exec-ing the vault CLI inside the container.
+	vaultInContainerAddr = "http://127.0.0.1:8200"
+	vaultToken           = "penhan-test-token"
+	mountPath            = "secret"
+	vaultContainer       = "penhan-vault"
 )
 
 var (
@@ -41,8 +46,8 @@ func setup() error {
 	if err := waitForVault(30 * time.Second); err != nil {
 		return fmt.Errorf("vault not ready: %w", err)
 	}
-	if err := enableKV2(); err != nil {
-		return fmt.Errorf("enable KV v2: %w", err)
+	if err := resetMount(); err != nil {
+		return fmt.Errorf("reset KV v2 mount: %w", err)
 	}
 	bin, err := buildBinary()
 	if err != nil {
@@ -77,11 +82,12 @@ func waitForVault(timeout time.Duration) error {
 	return fmt.Errorf("vault not ready within %s", timeout)
 }
 
-func enableKV2() error {
-	if out, err := vaultDockerExec("vault", "secrets", "enable", "-path="+mountPath, "-version=2", "kv"); err != nil {
-		if !strings.Contains(string(out), "already") {
-			return fmt.Errorf("enable kv: %w: %s", err, out)
-		}
+// resetMount recreates the KV v2 mount so every test starts from an empty Vault.
+func resetMount() error {
+	// Ignore disable errors: the mount may not exist yet.
+	_, _ = vaultDockerExec("secrets", "disable", mountPath)
+	if out, err := vaultDockerExec("secrets", "enable", "-path="+mountPath, "-version=2", "kv"); err != nil {
+		return fmt.Errorf("enable kv: %w: %s", err, out)
 	}
 	return nil
 }
@@ -124,6 +130,9 @@ func findRepoRoot() (string, error) {
 
 func newProject(t *testing.T) string {
 	t.Helper()
+	if err := resetMount(); err != nil {
+		t.Fatalf("reset vault mount: %v", err)
+	}
 	dir := t.TempDir()
 	for _, sub := range []string{"secrets", ".penhan/keys"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
@@ -186,6 +195,16 @@ func initProject(t *testing.T, dir string) {
 	}
 }
 
+// addSecret creates a secret via `penhan add <name>`, feeding the value on stdin.
+// The CLI writes it to secrets/<name>.<format> (yaml by default).
+func addSecret(t *testing.T, dir, name, value string) {
+	t.Helper()
+	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte(value+"\n"), "add", name)
+	if code != 0 {
+		t.Fatalf("add %s failed: code=%d stderr=%s stdout=%s", name, code, stderr, stdout)
+	}
+}
+
 func writeSecret(t *testing.T, dir, name, content string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, "secrets", name), []byte(content), 0o644); err != nil {
@@ -198,8 +217,9 @@ func vaultCmd(t *testing.T, args ...string) (string, error) {
 	return vaultDockerExec(args...)
 }
 
+// vaultDockerExec runs a vault CLI subcommand inside the test container.
 func vaultDockerExec(args ...string) (string, error) {
-	dockerArgs := append([]string{"exec", "-e", "VAULT_ADDR=" + vaultAddr, "-e", "VAULT_TOKEN=" + vaultToken, vaultContainer}, args...)
+	dockerArgs := append([]string{"exec", "-e", "VAULT_ADDR=" + vaultInContainerAddr, "-e", "VAULT_TOKEN=" + vaultToken, vaultContainer, "vault"}, args...)
 	cmd := exec.Command("docker", dockerArgs...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
@@ -220,11 +240,31 @@ func httpGet(url string) (int, error) {
 	return resp.StatusCode, nil
 }
 
+// mustPush runs `penhan push`, answering the confirmation prompt, and fails the test on error.
+func mustPush(t *testing.T, dir string) {
+	t.Helper()
+	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte("y\n"), "push")
+	if code != 0 {
+		t.Fatalf("push failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+}
+
 func readVaultData(t *testing.T, path string) map[string]interface{} {
+	t.Helper()
+	data, err := readVaultDataIfPresent(t, path)
+	if err != nil {
+		t.Fatalf("read vault %s: %v", path, err)
+	}
+	return data
+}
+
+// readVaultDataIfPresent returns the secret data at path, an error if the vault CLI
+// call fails, or an empty map if the secret exists but its latest version is deleted.
+func readVaultDataIfPresent(t *testing.T, path string) (map[string]interface{}, error) {
 	t.Helper()
 	out, err := vaultCmd(t, "kv", "get", "-format=json", mountPath+"/"+path)
 	if err != nil {
-		t.Fatalf("read vault %s: %v: %s", path, err, out)
+		return nil, fmt.Errorf("%w: %s", err, out)
 	}
 	var parsed struct {
 		Data struct {
@@ -232,7 +272,7 @@ func readVaultData(t *testing.T, path string) map[string]interface{} {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		t.Fatalf("parse vault json: %v", err)
+		return nil, fmt.Errorf("parse vault json: %w", err)
 	}
-	return parsed.Data.Data
+	return parsed.Data.Data, nil
 }

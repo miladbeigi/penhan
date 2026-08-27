@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 import (
@@ -11,9 +13,6 @@ func TestPushUploadsSecretToVault(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 	writeSecret(t, dir, "db.yaml", "password: s3cret\n")
-	if _, _, code := runPenhan(t, dir, "add", "db.yaml"); code != 0 {
-		t.Fatalf("add failed")
-	}
 
 	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte("y\n"), "push")
 	if code != 0 {
@@ -30,17 +29,17 @@ func TestPullDownloadsSecretFromVault(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 	writeSecret(t, dir, "api.yaml", "token: pulltest\n")
-	runPenhan(t, dir, "add", "api.yaml")
-	runPenhanWithStdin(t, dir, []byte("y\n"), "push")
+	mustPush(t, dir)
 
-	if err := os.Remove(filepath.Join(dir, "secrets", "api.yaml.enc")); err != nil {
+	// Simulate a fresh clone: no local secret files, no state.
+	if err := os.Remove(filepath.Join(dir, "secrets", "api.yaml")); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(dir, ".penhan", "state.json")); err != nil {
 		t.Fatal(err)
 	}
 
-	stdout, stderr, code := runPenhan(t, dir, "pull")
+	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte("y\n"), "pull")
 	if code != 0 {
 		t.Fatalf("pull failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}
@@ -55,16 +54,18 @@ func TestPushPullRoundTrip(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 	writeSecret(t, dir, "round.yaml", "password: roundtrip-value-42\n")
-	runPenhan(t, dir, "add", "round.yaml")
-	runPenhanWithStdin(t, dir, []byte("y\n"), "push")
+	mustPush(t, dir)
 
-	if _, err := vaultCmd(t, "kv", "put", mountPath+"/round", "password=remote-modified"); err != nil {
-		t.Fatalf("vault put failed: %v", err)
+	if out, err := vaultCmd(t, "kv", "put", mountPath+"/round", "password=remote-modified"); err != nil {
+		t.Fatalf("vault put failed: %v: %s", err, out)
 	}
 
-	runPenhan(t, dir, "pull")
+	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte("y\n"), "pull")
+	if code != 0 {
+		t.Fatalf("pull failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
+	}
 
-	stdout, stderr, code := runPenhan(t, dir, "decrypt", "secrets/round.yaml.enc")
+	stdout, stderr, code = runPenhan(t, dir, "decrypt", "secrets/round.yaml.enc")
 	if code != 0 {
 		t.Fatalf("decrypt failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}
@@ -84,9 +85,7 @@ func TestListShowsPushedSecrets(t *testing.T) {
 	initProject(t, dir)
 	writeSecret(t, dir, "a.yaml", "v: 1\n")
 	writeSecret(t, dir, "b.yaml", "v: 2\n")
-	runPenhan(t, dir, "add", "a.yaml")
-	runPenhan(t, dir, "add", "b.yaml")
-	runPenhanWithStdin(t, dir, []byte("y\n"), "push")
+	mustPush(t, dir)
 
 	stdout, stderr, code := runPenhan(t, dir, "list")
 	if code != 0 {
@@ -104,20 +103,19 @@ func TestRemoveDeletesSecret(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 	writeSecret(t, dir, "del.yaml", "v: gone\n")
-	runPenhan(t, dir, "add", "del.yaml")
-	runPenhanWithStdin(t, dir, []byte("y\n"), "push")
+	mustPush(t, dir)
 
-	stdout, stderr, code := runPenhan(t, dir, "remove", "del.yaml", "--force")
+	stdout, stderr, code := runPenhan(t, dir, "remove", "del", "--force")
 	if code != 0 {
 		t.Fatalf("remove failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, "secrets", "del.yaml.enc")); !os.IsNotExist(err) {
-		t.Errorf("expected encrypted file removed, got err=%v", err)
+	if _, err := os.Stat(filepath.Join(dir, "secrets", "del.yaml")); !os.IsNotExist(err) {
+		t.Errorf("expected secret file removed, got err=%v", err)
 	}
 
-	if _, err := vaultCmd(t, "kv", "get", mountPath+"/del"); err == nil {
-		t.Error("expected vault get to fail after remove")
+	if data, err := readVaultDataIfPresent(t, "del"); err == nil && len(data) > 0 {
+		t.Errorf("expected vault secret deleted, got: %v", data)
 	}
 }
 
@@ -125,14 +123,16 @@ func TestPlanShowsPendingChanges(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 	writeSecret(t, dir, "plan.yaml", "v: 1\n")
-	runPenhan(t, dir, "add", "plan.yaml")
 
 	stdout, stderr, code := runPenhan(t, dir, "plan")
 	if code != 0 {
 		t.Fatalf("plan failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	if !strings.Contains(strings.ToLower(stdout), "add") {
-		t.Errorf("plan output missing 'add': %s", stdout)
+	if !strings.Contains(stdout, "1 to add") {
+		t.Errorf("plan should report the new local secret as pending add: %s", stdout)
+	}
+	if !strings.Contains(stdout, "plan (new)") {
+		t.Errorf("plan should list the pending secret path: %s", stdout)
 	}
 }
 
@@ -140,20 +140,26 @@ func TestConflictDetectedWithoutForce(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 	writeSecret(t, dir, "conf.yaml", "v: original\n")
-	runPenhan(t, dir, "add", "conf.yaml")
-	runPenhanWithStdin(t, dir, []byte("y\n"), "push")
+	mustPush(t, dir)
 
-	if _, err := vaultCmd(t, "kv", "put", mountPath+"/conf", "v=remote-change"); err != nil {
-		t.Fatalf("vault put: %v", err)
+	if out, err := vaultCmd(t, "kv", "put", mountPath+"/conf", "v=remote-change"); err != nil {
+		t.Fatalf("vault put: %v: %s", err, out)
 	}
 
-	if err := os.WriteFile(filepath.Join(dir, "secrets", "conf.yaml"), []byte("v: local-change\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeSecret(t, dir, "conf.yaml", "v: local-change\n")
 
-	_, _, code := runPenhanWithStdin(t, dir, []byte("y\n"), "push")
+	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte("y\n"), "push")
 	if code == 0 {
-		t.Error("expected push to fail on conflict, got success")
+		t.Errorf("expected push to fail on conflict, got success: %s", stdout)
+	}
+	if !strings.Contains(strings.ToLower(stdout+stderr), "conflict") {
+		t.Errorf("expected conflict message, got stdout=%s stderr=%s", stdout, stderr)
+	}
+
+	// The remote value must be untouched.
+	data := readVaultData(t, "conf")
+	if data["v"] != "remote-change" {
+		t.Errorf("conflict push must not overwrite remote, got: %v", data)
 	}
 }
 
@@ -161,16 +167,13 @@ func TestForceOverridesConflict(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 	writeSecret(t, dir, "force.yaml", "v: original\n")
-	runPenhan(t, dir, "add", "force.yaml")
-	runPenhanWithStdin(t, dir, []byte("y\n"), "push")
+	mustPush(t, dir)
 
-	if _, err := vaultCmd(t, "kv", "put", mountPath+"/force", "v=remote-change"); err != nil {
-		t.Fatalf("vault put: %v", err)
+	if out, err := vaultCmd(t, "kv", "put", mountPath+"/force", "v=remote-change"); err != nil {
+		t.Fatalf("vault put: %v: %s", err, out)
 	}
 
-	if err := os.WriteFile(filepath.Join(dir, "secrets", "force.yaml"), []byte("v: local-force\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeSecret(t, dir, "force.yaml", "v: local-force\n")
 
 	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte("y\n"), "push", "--force")
 	if code != 0 {

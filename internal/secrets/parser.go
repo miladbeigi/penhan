@@ -16,8 +16,11 @@ func ParseFile(path string) (map[string]string, error) {
 		return nil, fmt.Errorf("read file: %w", err)
 	}
 
-	ext := filepath.Ext(path)
+	return Parse(data, filepath.Ext(path))
+}
 
+// Parse decodes YAML or JSON content (selected by ext) into key-value pairs.
+func Parse(data []byte, ext string) (map[string]string, error) {
 	switch ext {
 	case ".yaml", ".yml":
 		return parseYAML(data)

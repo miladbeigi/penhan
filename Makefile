@@ -34,13 +34,14 @@ integration-up: ## Start Vault container for integration tests
 	cd integration && docker compose up -d
 	@echo "Waiting for Vault to be ready..."
 	@for i in $$(seq 1 30); do \
-		if curl -sf http://127.0.0.1:8200/v1/sys/health > /dev/null 2>&1; then \
+		if curl -sf http://127.0.0.1:18200/v1/sys/health > /dev/null 2>&1; then \
 			echo "Vault is ready"; \
 			exit 0; \
 		fi; \
 		sleep 1; \
-	done
-	@echo "Vault failed to start" && exit 1
+	done; \
+	echo "Vault failed to start"; \
+	exit 1
 
 integration-down: ## Stop Vault container
 	cd integration && docker compose down

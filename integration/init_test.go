@@ -1,3 +1,5 @@
+//go:build integration
+
 package integration
 
 import (
@@ -24,18 +26,25 @@ func TestInitCreatesProjectStructure(t *testing.T) {
 	}
 }
 
-func TestAddEncryptsSecret(t *testing.T) {
+func TestAddThenEncryptSecret(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 
 	secretContent := "super-secret-value"
-	if err := os.WriteFile(filepath.Join(dir, "secrets", "db.yaml"), []byte("password: "+secretContent+"\n"), 0o644); err != nil {
-		t.Fatal(err)
+	addSecret(t, dir, "db", secretContent)
+
+	plainPath := filepath.Join(dir, "secrets", "db.yaml")
+	plain, err := os.ReadFile(plainPath)
+	if err != nil {
+		t.Fatalf("add did not create secret file: %v", err)
+	}
+	if !strings.Contains(string(plain), secretContent) {
+		t.Fatalf("secret file missing value: %s", plain)
 	}
 
-	stdout, stderr, code := runPenhan(t, dir, "add", "db.yaml")
+	stdout, stderr, code := runPenhan(t, dir, "encrypt", "secrets/db.yaml")
 	if code != 0 {
-		t.Fatalf("add failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
+		t.Fatalf("encrypt failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}
 
 	encPath := filepath.Join(dir, "secrets", "db.yaml.enc")
@@ -46,19 +55,30 @@ func TestAddEncryptsSecret(t *testing.T) {
 	if strings.Contains(string(data), secretContent) {
 		t.Error("encrypted file still contains plaintext")
 	}
+
+	// The key saved by init must decrypt what encrypt produced, in a fresh process.
+	if err := os.Remove(plainPath); err != nil {
+		t.Fatal(err)
+	}
+	stdout, stderr, code = runPenhan(t, dir, "decrypt", "secrets/db.yaml.enc")
+	if code != 0 {
+		t.Fatalf("decrypt failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	decrypted, err := os.ReadFile(plainPath)
+	if err != nil {
+		t.Fatalf("decrypted file not created: %v", err)
+	}
+	if !strings.Contains(string(decrypted), secretContent) {
+		t.Errorf("decrypted content mismatch: %s", decrypted)
+	}
 }
 
 func TestAddListShowsSecret(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
-	writeSecret(t, dir, "api.yaml", "key: abc123\n")
+	addSecret(t, dir, "api", "abc123")
 
-	stdout, stderr, code := runPenhan(t, dir, "add", "api.yaml")
-	if code != 0 {
-		t.Fatalf("add failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
-	}
-
-	stdout, stderr, code = runPenhan(t, dir, "list")
+	stdout, stderr, code := runPenhan(t, dir, "list")
 	if code != 0 {
 		t.Fatalf("list failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}
