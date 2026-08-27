@@ -13,7 +13,7 @@ import (
 func ParseFile(path string) (map[string]string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read file: %w", err)
 	}
 
 	ext := filepath.Ext(path)
@@ -31,7 +31,7 @@ func ParseFile(path string) (map[string]string, error) {
 func parseYAML(data []byte) (map[string]string, error) {
 	var raw map[string]interface{}
 	if err := yaml.Unmarshal(data, &raw); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse yaml: %w", err)
 	}
 
 	return toStringMap(raw), nil
@@ -40,7 +40,7 @@ func parseYAML(data []byte) (map[string]string, error) {
 func parseJSON(data []byte) (map[string]string, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse json: %w", err)
 	}
 
 	return toStringMap(raw), nil
@@ -71,8 +71,8 @@ func WriteFile(path string, data map[string]string) error {
 	}
 
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal data: %w", err)
 	}
 
-	return os.WriteFile(path, content, 0644)
+	return os.WriteFile(path, content, 0600)
 }
