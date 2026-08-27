@@ -24,7 +24,11 @@ func runList(cmd *cobra.Command, args []string) error {
 	statePath := filepath.Join(".penhan", "state.json")
 	s, err := state.Load(statePath)
 	if err != nil {
-		s = state.NewState()
+		if os.IsNotExist(err) {
+			s = state.NewState()
+		} else {
+			return fmt.Errorf("load state: %w", err)
+		}
 	}
 
 	secretsDir := "secrets/"
