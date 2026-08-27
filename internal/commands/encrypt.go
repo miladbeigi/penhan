@@ -39,6 +39,8 @@ func runEncrypt(cmd *cobra.Command, args []string) error {
 		if err := provider.Setup(cfg.Encryption.AES.KeyPath, ""); err != nil {
 			return err
 		}
+	default:
+		return fmt.Errorf("unsupported encryption method: %s", cfg.Encryption.Method)
 	}
 
 	for _, arg := range args {

@@ -39,6 +39,8 @@ func runDecrypt(cmd *cobra.Command, args []string) error {
 		if err := provider.Setup(cfg.Encryption.AES.KeyPath, ""); err != nil {
 			return err
 		}
+	default:
+		return fmt.Errorf("unsupported encryption method: %s", cfg.Encryption.Method)
 	}
 
 	for _, arg := range args {
@@ -92,7 +94,9 @@ func decryptFile(path string, provider crypto.Provider) error {
 		return err
 	}
 
-	os.Remove(path)
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("remove encrypted file: %w", err)
+	}
 
 	fmt.Printf("  Decrypted: %s\n", decPath)
 	return nil
