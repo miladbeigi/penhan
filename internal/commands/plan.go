@@ -1,12 +1,10 @@
 package commands
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/milad/penhan/internal/backends"
 	"github.com/milad/penhan/internal/config"
 	"github.com/milad/penhan/internal/state"
 	"github.com/spf13/cobra"
@@ -23,44 +21,42 @@ func init() {
 }
 
 func runPlan(cmd *cobra.Command, args []string) error {
-	// Load config
 	cfg, err := config.Load("penhan.yaml")
 	if err != nil {
 		return err
 	}
 
-	// Load state
-	statePath := filepath.Join(".penhan", "state.json")
-	s, err := state.Load(statePath)
+	provider, err := newCryptoProvider(cfg)
 	if err != nil {
-		if os.IsNotExist(err) {
-			s = state.NewState()
-		} else {
-			return fmt.Errorf("load state: %w", err)
-		}
+		return err
 	}
 
-	// Try to fetch remote state from Vault (optional)
+	statePath := filepath.Join(".penhan", "state.json")
+	s, err := loadStateOrNew(statePath)
+	if err != nil {
+		return err
+	}
+
+	local, err := collectLocalSecrets(cfg, provider)
+	if err != nil {
+		return err
+	}
+
+	// Fetch remote state from Vault when reachable; plan still works offline,
+	// but never silently — a hidden backend problem looks like a clean plan.
 	remoteState := state.NewState()
-	if _, err := os.Stat(cfg.Backend.Vault.TokenPath); err == nil {
-		backend := backends.NewVaultProvider()
-		token, err := os.ReadFile(cfg.Backend.Vault.TokenPath)
-		if err == nil {
-			if err := backend.Setup(cfg.Backend.Vault.Addr, string(token), cfg.Backend.Vault.MountPath, cfg.Backend.Vault.BasePath); err == nil {
-				if paths, err := backend.List(""); err == nil {
-					for _, path := range paths {
-						if content, err := backend.Pull(path); err == nil {
-							hash := fmt.Sprintf("sha256:%x", sha256.Sum256(content))
-							remoteState.UpdateHash(path, hash)
-						}
-					}
-				}
-			}
+	backend, err := newVaultBackend(cfg)
+	if err == nil {
+		var rs *state.State
+		if rs, err = buildRemoteState(s, backend); err == nil {
+			remoteState = rs
 		}
 	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not read remote state, planning against an empty backend: %v\n", err)
+	}
 
-	// Generate plan
-	plan := state.GeneratePlan(s, remoteState)
+	plan := state.GeneratePlan(buildLocalState(s, local), remoteState)
 
 	// Show plan
 	fmt.Println("Plan:")

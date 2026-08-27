@@ -16,8 +16,11 @@ func ParseFile(path string) (map[string]string, error) {
 		return nil, fmt.Errorf("read file: %w", err)
 	}
 
-	ext := filepath.Ext(path)
+	return Parse(data, filepath.Ext(path))
+}
 
+// Parse decodes YAML or JSON content (selected by ext) into key-value pairs.
+func Parse(data []byte, ext string) (map[string]string, error) {
 	switch ext {
 	case ".yaml", ".yml":
 		return parseYAML(data)
@@ -34,7 +37,7 @@ func parseYAML(data []byte) (map[string]string, error) {
 		return nil, fmt.Errorf("parse yaml: %w", err)
 	}
 
-	return toStringMap(raw), nil
+	return toStringMap(raw)
 }
 
 func parseJSON(data []byte) (map[string]string, error) {
@@ -43,15 +46,20 @@ func parseJSON(data []byte) (map[string]string, error) {
 		return nil, fmt.Errorf("parse json: %w", err)
 	}
 
-	return toStringMap(raw), nil
+	return toStringMap(raw)
 }
 
-func toStringMap(raw map[string]interface{}) map[string]string {
+func toStringMap(raw map[string]interface{}) (map[string]string, error) {
 	result := make(map[string]string)
 	for k, v := range raw {
+		switch v.(type) {
+		case map[string]interface{}, map[interface{}]interface{}, []interface{}:
+			// Stringifying structure would corrupt the secret ("map[a:1]").
+			return nil, fmt.Errorf("secret key %q has a nested value; only flat key-value pairs are supported", k)
+		}
 		result[k] = fmt.Sprintf("%v", v)
 	}
-	return result
+	return result, nil
 }
 
 // WriteFile writes key-value pairs to a YAML or JSON file.

@@ -2,15 +2,12 @@ package commands
 
 import (
 	"bufio"
-	"crypto/sha256"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/milad/penhan/internal/backends"
 	"github.com/milad/penhan/internal/config"
-	"github.com/milad/penhan/internal/crypto"
 	"github.com/milad/penhan/internal/secrets"
 	"github.com/milad/penhan/internal/state"
 	"github.com/spf13/cobra"
@@ -35,33 +32,20 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var provider crypto.Provider
-	switch cfg.Encryption.Method {
-	case "gpg":
-		provider = crypto.NewGPGProvider()
-		if err := provider.Setup(cfg.Encryption.GPG.KeyPath, ""); err != nil {
-			return err
-		}
-	case "aes":
-		provider = crypto.NewAESProvider()
-		if err := provider.Setup(cfg.Encryption.AES.KeyPath, ""); err != nil {
-			return err
-		}
-	}
-
-	backend := backends.NewVaultProvider()
-	token, err := os.ReadFile(cfg.Backend.Vault.TokenPath)
+	provider, err := newCryptoProvider(cfg)
 	if err != nil {
 		return err
 	}
-	if err := backend.Setup(cfg.Backend.Vault.Addr, string(token), cfg.Backend.Vault.MountPath, cfg.Backend.Vault.BasePath); err != nil {
+
+	backend, err := newVaultBackend(cfg)
+	if err != nil {
 		return err
 	}
 
 	statePath := filepath.Join(".penhan", "state.json")
-	s, err := state.Load(statePath)
+	s, err := loadStateOrNew(statePath)
 	if err != nil {
-		s = state.NewState()
+		return err
 	}
 
 	plan := state.GeneratePlan(state.NewState(), s)
@@ -100,7 +84,10 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 		data, err := backend.Pull(remotePath)
 		if err != nil {
-			return err
+			// A deleted version still appears in the listing; skip what
+			// cannot be read instead of aborting the whole pull.
+			fmt.Printf("  Skipped %s: %v\n", remotePath, err)
+			continue
 		}
 
 		encrypted, err := provider.Encrypt(data)
@@ -116,9 +103,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		hash := fmt.Sprintf("sha256:%x", sha256.Sum256(data))
-		s.UpdateRemoteHash(remotePath, hash)
-		s.MarkSynced(remotePath)
+		s.SetSynced(remotePath, hashContent(data))
 
 		fmt.Printf("  Pulled: %s\n", localPath)
 	}

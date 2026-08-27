@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/milad/penhan/internal/config"
 	"github.com/milad/penhan/internal/secrets"
-	"github.com/milad/penhan/internal/state"
 	"github.com/spf13/cobra"
 )
 
@@ -28,44 +29,56 @@ func runList(cmd *cobra.Command, args []string) error {
 	}
 
 	statePath := filepath.Join(".penhan", "state.json")
-	s, err := state.Load(statePath)
+	s, err := loadStateOrNew(statePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			s = state.NewState()
-		} else {
-			return fmt.Errorf("load state: %w", err)
-		}
+		return err
 	}
 
+	// Collect one display path per secret; when both the plaintext and the
+	// encrypted file exist, show the plaintext (the editable copy).
 	secretsDir := cfg.Secrets.Path
+	display := make(map[string]string)
 	err = filepath.Walk(secretsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
-
 		if info.IsDir() {
 			return nil
 		}
 
-		ext := filepath.Ext(path)
+		name := path
+		isEnc := strings.HasSuffix(name, ".enc")
+		if isEnc {
+			name = strings.TrimSuffix(name, ".enc")
+		}
+		ext := filepath.Ext(name)
 		if ext != ".yaml" && ext != ".yml" && ext != ".json" {
 			return nil
 		}
 
-		vaultPath := secrets.LocalToVault(path, secretsDir)
-		entry, exists := s.Secrets[vaultPath]
-
-		status := "new"
-		if exists {
-			status = entry.Status
+		vaultPath := secrets.LocalToVault(name, secretsDir)
+		if _, seen := display[vaultPath]; seen && isEnc {
+			return nil
 		}
-
-		fmt.Printf("  %-40s [%s]\n", path, status)
+		display[vaultPath] = path
 		return nil
 	})
-
 	if err != nil {
 		return err
+	}
+
+	paths := make([]string, 0, len(display))
+	for vaultPath := range display {
+		paths = append(paths, vaultPath)
+	}
+	sort.Strings(paths)
+
+	for _, vaultPath := range paths {
+		status := "new"
+		if entry, exists := s.Secrets[vaultPath]; exists {
+			status = entry.Status
+		}
+		fmt.Printf("  %-40s [%s]\n", display[vaultPath], status)
 	}
 
 	return nil

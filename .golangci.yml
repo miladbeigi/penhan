@@ -12,11 +12,11 @@ linters:
     - unparam
     - gocritic
 
-linters-settings:
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - style
+  settings:
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
 
 run:
   timeout: 5m

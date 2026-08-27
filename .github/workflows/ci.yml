@@ -35,11 +35,10 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
       - name: golangci-lint
-        run: golangci-lint run
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.13.1
 
   vet:
     name: Vet

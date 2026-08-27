@@ -43,6 +43,10 @@ func runEncrypt(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unsupported encryption method: %s", cfg.Encryption.Method)
 	}
 
+	if len(args) == 0 {
+		args = []string{cfg.Secrets.Path}
+	}
+
 	for _, arg := range args {
 		if err := encryptPath(arg, provider); err != nil {
 			return err
@@ -92,6 +96,12 @@ func encryptFile(path string, provider crypto.Provider) error {
 	encPath := path + ".enc"
 	if err := os.WriteFile(encPath, encrypted, 0o644); err != nil {
 		return err
+	}
+
+	// Mirror decrypt (which removes the .enc): encrypting at rest means the
+	// plaintext must not linger next to the encrypted file.
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("remove plaintext file: %w", err)
 	}
 
 	fmt.Printf("  Encrypted: %s\n", path)

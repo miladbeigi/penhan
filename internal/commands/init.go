@@ -3,6 +3,7 @@ package commands
 import (
 	"bufio"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +13,16 @@ import (
 	"github.com/milad/penhan/internal/state"
 	"github.com/spf13/cobra"
 )
+
+// validateVaultAddress rejects addresses the Vault client would only choke on
+// much later (e.g. "0.0.0.0:8200" fails at first push with a cryptic URL error).
+func validateVaultAddress(addr string) error {
+	u, err := url.Parse(addr)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return fmt.Errorf("invalid vault address %q: must include a scheme, e.g. http://127.0.0.1:8200", addr)
+	}
+	return nil
+}
 
 var initCmd = &cobra.Command{
 	Use:   "init",
@@ -24,6 +35,10 @@ func init() {
 }
 
 func runInit(cmd *cobra.Command, args []string) error {
+	if _, err := os.Stat("penhan.yaml"); err == nil {
+		return fmt.Errorf("penhan.yaml already exists; this directory is already initialized")
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	// Ask for encryption method
@@ -49,15 +64,25 @@ func runInit(cmd *cobra.Command, args []string) error {
 	vaultAddr, _ := reader.ReadString('\n')
 	vaultAddr = strings.TrimSpace(vaultAddr)
 
+	if err := validateVaultAddress(vaultAddr); err != nil {
+		return err
+	}
+
 	fmt.Print("Vault token: ")
 	vaultToken, _ := reader.ReadString('\n')
 	vaultToken = strings.TrimSpace(vaultToken)
 
 	// Create config
+	keyPath := filepath.Join(".penhan", "keys", method+".key")
+	encryption := config.EncryptionConfig{Method: method}
+	switch method {
+	case "gpg":
+		encryption.GPG.KeyPath = keyPath
+	case "aes":
+		encryption.AES.KeyPath = keyPath
+	}
 	cfg := &config.Config{
-		Encryption: config.EncryptionConfig{
-			Method: method,
-		},
+		Encryption: encryption,
 		Backend: config.BackendConfig{
 			Type: "vault",
 			Vault: config.VaultConfig{
@@ -99,7 +124,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		provider = crypto.NewAESProvider()
 	}
 
-	keyPath := filepath.Join(".penhan", "keys", method+".key")
 	if err := provider.Setup(keyPath, ""); err != nil {
 		return err
 	}
