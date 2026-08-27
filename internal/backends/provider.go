@@ -2,11 +2,11 @@ package backends
 
 // Provider defines the interface for backend storage providers.
 type Provider interface {
-	// Push uploads local secrets to the backend.
-	Push(localPath string, remotePath string) error
+	// Push uploads secret content to the backend.
+	Push(content []byte, remotePath string) error
 
-	// Pull downloads secrets from the backend to local.
-	Pull(remotePath string, localPath string) error
+	// Pull downloads secret content from the backend.
+	Pull(remotePath string) ([]byte, error)
 
 	// List returns all secret paths at the given remote path.
 	List(remotePath string) ([]string, error)

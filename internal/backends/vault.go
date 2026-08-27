@@ -42,14 +42,14 @@ func (p *VaultProvider) IsInitialized() bool {
 	return p.client != nil
 }
 
-func (p *VaultProvider) Push(localPath string, remotePath string) error {
+func (p *VaultProvider) Push(content []byte, remotePath string) error {
 	// TODO: Implement push with state management
 	return fmt.Errorf("not implemented")
 }
 
-func (p *VaultProvider) Pull(remotePath string, localPath string) error {
+func (p *VaultProvider) Pull(remotePath string) ([]byte, error) {
 	// TODO: Implement pull with state management
-	return fmt.Errorf("not implemented")
+	return nil, fmt.Errorf("not implemented")
 }
 
 func (p *VaultProvider) List(remotePath string) ([]string, error) {
