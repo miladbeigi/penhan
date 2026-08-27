@@ -43,6 +43,10 @@ func runDecrypt(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("unsupported encryption method: %s", cfg.Encryption.Method)
 	}
 
+	if len(args) == 0 {
+		args = []string{cfg.Secrets.Path}
+	}
+
 	for _, arg := range args {
 		if err := decryptPath(arg, provider); err != nil {
 			return err

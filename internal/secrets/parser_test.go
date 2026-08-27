@@ -3,6 +3,7 @@ package secrets
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -74,5 +75,42 @@ func TestWriteParseRoundtrip(t *testing.T) {
 		if parsed[k] != v {
 			t.Errorf("parsed[%s] = %q, want %q", k, parsed[k], v)
 		}
+	}
+}
+
+// Nested structures cannot be represented as flat key-value pairs; silently
+// stringifying them (fmt "%v" → "map[a:1]") corrupts the secret. Reject them.
+func TestParseRejectsNestedYAMLValues(t *testing.T) {
+	_, err := Parse([]byte("db:\n  host: localhost\n  port: 5432\n"), ".yaml")
+	if err == nil {
+		t.Fatal("Parse() = nil error, want error for nested values")
+	}
+	if !strings.Contains(err.Error(), "nested") {
+		t.Errorf("error %q should mention nested values", err)
+	}
+}
+
+func TestParseRejectsNestedJSONValues(t *testing.T) {
+	_, err := Parse([]byte(`{"db": {"host": "localhost"}}`), ".json")
+	if err == nil {
+		t.Fatal("Parse() = nil error, want error for nested values")
+	}
+}
+
+func TestParseRejectsListValues(t *testing.T) {
+	_, err := Parse([]byte("hosts:\n  - a\n  - b\n"), ".yaml")
+	if err == nil {
+		t.Fatal("Parse() = nil error, want error for list values")
+	}
+}
+
+// Scalar non-string values (ints, bools) remain fine as strings.
+func TestParseAllowsScalarValues(t *testing.T) {
+	m, err := Parse([]byte("port: 5432\nssl: true\n"), ".yaml")
+	if err != nil {
+		t.Fatalf("Parse() error = %v", err)
+	}
+	if m["port"] != "5432" || m["ssl"] != "true" {
+		t.Errorf("got %v, want port=5432 ssl=true", m)
 	}
 }

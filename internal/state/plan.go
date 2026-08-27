@@ -32,9 +32,14 @@ func GeneratePlan(local, remote *State) *Plan {
 			continue
 		}
 
-		// Check for conflicts: both local and remote have changed since last sync
-		if localEntry.Status == "local_changed" &&
-			remoteEntry.Status == "remote_changed" {
+		// Identical content needs no action, whatever the statuses say.
+		if localEntry.LocalHash == remoteEntry.LocalHash {
+			continue
+		}
+
+		// The remote changed since the last sync: pushing would overwrite
+		// someone else's edit, so it must be an explicit (--force) decision.
+		if remoteEntry.Status == "remote_changed" {
 			plan.Conflict++
 			plan.Changes = append(plan.Changes, PlanChange{
 				Path:   path,
@@ -43,14 +48,11 @@ func GeneratePlan(local, remote *State) *Plan {
 			continue
 		}
 
-		// Check for updates: local hash differs from remote
-		if localEntry.LocalHash != remoteEntry.LocalHash {
-			plan.Update++
-			plan.Changes = append(plan.Changes, PlanChange{
-				Path:   path,
-				Action: "update",
-			})
-		}
+		plan.Update++
+		plan.Changes = append(plan.Changes, PlanChange{
+			Path:   path,
+			Action: "update",
+		})
 	}
 
 	// Check for deletions

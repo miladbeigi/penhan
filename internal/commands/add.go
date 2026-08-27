@@ -47,6 +47,10 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	value, _ := reader.ReadString('\n')
 	value = strings.TrimSpace(value)
 
+	if value == "" {
+		fmt.Println("warning: empty value for secret")
+	}
+
 	data := map[string]string{
 		"value": value,
 	}

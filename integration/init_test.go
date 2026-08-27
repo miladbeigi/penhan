@@ -55,11 +55,11 @@ func TestAddThenEncryptSecret(t *testing.T) {
 	if strings.Contains(string(data), secretContent) {
 		t.Error("encrypted file still contains plaintext")
 	}
+	if _, err := os.Stat(plainPath); !os.IsNotExist(err) {
+		t.Errorf("encrypt must remove the plaintext file, got err=%v", err)
+	}
 
 	// The key saved by init must decrypt what encrypt produced, in a fresh process.
-	if err := os.Remove(plainPath); err != nil {
-		t.Fatal(err)
-	}
 	stdout, stderr, code = runPenhan(t, dir, "decrypt", "secrets/db.yaml.enc")
 	if code != 0 {
 		t.Fatalf("decrypt failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
