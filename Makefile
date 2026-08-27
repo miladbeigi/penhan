@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: ci fmt vet lint test build tidy release help
+.PHONY: ci fmt vet lint test test-integration integration-up integration-down build tidy release help
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -14,7 +14,7 @@ help: ## Show this help message
 	@echo "Usage: make [target]"
 	@echo ""
 	@echo "Targets:"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 ci: fmt vet lint test build tidy ## Run all CI checks
 
@@ -27,8 +27,27 @@ vet: ## Run go vet
 lint: ## Run golangci-lint
 	golangci-lint run
 
-test: ## Run tests
+test: ## Run unit tests
 	go test ./...
+
+integration-up: ## Start Vault container for integration tests
+	cd integration && docker compose up -d
+	@echo "Waiting for Vault to be ready..."
+	@for i in $$(seq 1 30); do \
+		if curl -sf http://127.0.0.1:8200/v1/sys/health > /dev/null 2>&1; then \
+			echo "Vault is ready"; \
+			exit 0; \
+		fi; \
+		sleep 1; \
+	done
+	@echo "Vault failed to start" && exit 1
+
+integration-down: ## Stop Vault container
+	cd integration && docker compose down
+
+test-integration: integration-up ## Run integration tests (requires Docker)
+	go test -tags=integration -v -timeout 5m ./integration/...
+	@make integration-down
 
 build: ## Build binary
 	go build -ldflags "$(LDFLAGS)" -o penhan ./cmd/penhan
