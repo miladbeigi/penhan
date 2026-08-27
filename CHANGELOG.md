@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-08-27
+
+### Changed
+
+- A secret changed only on the remote is now a conflict: `push` no longer silently overwrites remote edits (use `--force` to override)
+- `encrypt` removes the plaintext file after writing the `.enc`, mirroring `decrypt`
+- `encrypt` and `decrypt` with no arguments default to the configured secrets directory
+- `init` refuses to overwrite an existing `penhan.yaml`
+- Runtime errors no longer print the cobra usage block
+
+### Fixed
+
+- Vault listing recurses into KV v2 folders: nested secrets (e.g. `apps/api-token`) are restored by `pull`, settle in `plan`, and participate in conflict detection
+- `pull` skips unreadable entries (soft-deleted versions) instead of aborting the entire pull
+- `list` no longer fails when `state.json` is missing and now shows encrypted-only secrets
+- Secret files with nested maps or lists are rejected with a clear error instead of being silently corrupted (`map[a:1]`) in Vault
+- `init` validates the Vault address up front instead of failing at first push with a cryptic URL parse error
+- `plan` warns when the backend is unreachable instead of silently planning against an empty remote
+- `add` warns when the secret value is empty
+
 ## [0.2.0] - 2026-08-27
 
 ### Added
