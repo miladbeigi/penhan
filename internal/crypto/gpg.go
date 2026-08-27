@@ -12,8 +12,7 @@ import (
 )
 
 type GPGProvider struct {
-	entity  *openpgp.Entity
-	keyPath string
+	entity *openpgp.Entity
 }
 
 func NewGPGProvider() *GPGProvider {
@@ -21,8 +20,6 @@ func NewGPGProvider() *GPGProvider {
 }
 
 func (p *GPGProvider) Setup(keyPath string, passphrase string) error {
-	p.keyPath = keyPath
-
 	cfg := &packet.Config{DefaultHash: crypto.SHA256}
 
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
