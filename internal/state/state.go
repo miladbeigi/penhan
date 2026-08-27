@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"time"
 )
@@ -32,12 +33,12 @@ func NewState() *State {
 func Load(path string) (*State, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read state file: %w", err)
 	}
 
 	s := &State{}
 	if err := json.Unmarshal(data, s); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse state: %w", err)
 	}
 
 	return s, nil
@@ -47,7 +48,7 @@ func Load(path string) (*State, error) {
 func Save(s *State, path string) error {
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal state: %w", err)
 	}
 
 	return os.WriteFile(path, data, 0644)
