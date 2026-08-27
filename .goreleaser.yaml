@@ -46,7 +46,7 @@ changelog:
 
 release:
   github:
-    owner: milad
+    owner: miladbeigi
     name: penhan
   prerelease: auto
   name_template: "v{{ .Version }}"
