@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/milad/penhan/internal/config"
 	"github.com/milad/penhan/internal/secrets"
 	"github.com/milad/penhan/internal/state"
 	"github.com/spf13/cobra"
@@ -21,6 +22,11 @@ func init() {
 }
 
 func runList(cmd *cobra.Command, args []string) error {
+	cfg, err := config.Load("penhan.yaml")
+	if err != nil {
+		return err
+	}
+
 	statePath := filepath.Join(".penhan", "state.json")
 	s, err := state.Load(statePath)
 	if err != nil {
@@ -31,7 +37,7 @@ func runList(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	secretsDir := "secrets/"
+	secretsDir := cfg.Secrets.Path
 	err = filepath.Walk(secretsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err

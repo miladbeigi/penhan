@@ -9,6 +9,7 @@ import (
 
 	"github.com/milad/penhan/internal/config"
 	"github.com/milad/penhan/internal/crypto"
+	"github.com/milad/penhan/internal/state"
 	"github.com/spf13/cobra"
 )
 
@@ -106,7 +107,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Create state file
 	statePath := filepath.Join(".penhan", "state.json")
 	if _, err := os.Stat(statePath); os.IsNotExist(err) {
-		if err := os.WriteFile(statePath, []byte(`{"version":1,"secrets":{}}`), 0o644); err != nil {
+		s := state.NewState()
+		if err := state.Save(s, statePath); err != nil {
 			return err
 		}
 	}
