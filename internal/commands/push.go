@@ -154,6 +154,6 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println("\n✓ Push complete")
+	fmt.Println("\nPush complete")
 	return nil
 }
