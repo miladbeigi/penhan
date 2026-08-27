@@ -36,7 +36,7 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	filePath := filepath.Join(cfg.Secrets.Path, name+"."+cfg.Secrets.Format)
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return fmt.Errorf("secret not found: %s", filePath)
+		return fmt.Errorf("secret not found: %w", err)
 	}
 
 	fmt.Printf("Remove secret %s? (y/N) ", name)
@@ -55,7 +55,9 @@ func runRemove(cmd *cobra.Command, args []string) error {
 
 	encPath := filePath + ".enc"
 	if _, err := os.Stat(encPath); err == nil {
-		os.Remove(encPath)
+		if err := os.Remove(encPath); err != nil {
+			return fmt.Errorf("removing encrypted file: %w", err)
+		}
 	}
 
 	backend := backends.NewVaultProvider()
@@ -75,7 +77,11 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	statePath := filepath.Join(".penhan", "state.json")
 	s, err := state.Load(statePath)
 	if err != nil {
-		s = state.NewState()
+		if os.IsNotExist(err) {
+			s = state.NewState()
+		} else {
+			return fmt.Errorf("load state: %w", err)
+		}
 	}
 
 	delete(s.Secrets, vaultPath)
