@@ -30,16 +30,16 @@ Penhan manages secrets securely using Git as the source of truth. Secrets are st
 
 ### Binary (recommended)
 
-Download a pre-built binary from the [latest release](https://github.com/milad/penhan/releases/latest):
+Download a pre-built binary from the [latest release](https://github.com/miladbeigi/penhan/releases/latest):
 
 ```bash
 # macOS (Apple Silicon)
-curl -Lo penhan.tar.gz https://github.com/milad/penhan/releases/latest/download/penhan_*_darwin_arm64.tar.gz
+curl -Lo penhan.tar.gz https://github.com/miladbeigi/penhan/releases/latest/download/penhan_*_darwin_arm64.tar.gz
 tar xzf penhan.tar.gz
 sudo mv penhan /usr/local/bin/
 
 # Linux (amd64)
-curl -Lo penhan.tar.gz https://github.com/milad/penhan/releases/latest/download/penhan_*_linux_amd64.tar.gz
+curl -Lo penhan.tar.gz https://github.com/miladbeigi/penhan/releases/latest/download/penhan_*_linux_amd64.tar.gz
 tar xzf penhan.tar.gz
 sudo mv penhan /usr/local/bin/
 ```
@@ -49,13 +49,13 @@ sudo mv penhan /usr/local/bin/
 Requires Go 1.25+:
 
 ```bash
-go install github.com/milad/penhan/cmd/penhan@latest
+go install github.com/miladbeigi/penhan/cmd/penhan@latest
 ```
 
 ### Build from Source
 
 ```bash
-git clone https://github.com/milad/penhan.git
+git clone https://github.com/miladbeigi/penhan.git
 cd penhan
 make build
 ```
@@ -192,7 +192,7 @@ Releases are automated via GitHub Actions and GoReleaser:
    git tag -a v1.0.0 -m "Release v1.0.0"
    git push origin v1.0.0
    ```
-3. GitHub Actions builds and publishes binaries to [Releases](https://github.com/milad/penhan/releases)
+3. GitHub Actions builds and publishes binaries to [Releases](https://github.com/miladbeigi/penhan/releases)
 
 ## License
 
