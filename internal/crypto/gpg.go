@@ -33,7 +33,11 @@ func (p *GPGProvider) Setup(keyPath, passphrase string) error {
 		if err != nil {
 			return err
 		}
-		defer f.Close()
+		defer func() {
+			if cerr := f.Close(); cerr != nil && err == nil {
+				err = cerr
+			}
+		}()
 
 		return entity.SerializePrivate(f, nil)
 	}
@@ -42,7 +46,11 @@ func (p *GPGProvider) Setup(keyPath, passphrase string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
 	entities, err := openpgp.ReadKeyRing(f)
 	if err != nil {
