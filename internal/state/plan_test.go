@@ -14,7 +14,7 @@ func TestGeneratePlan(t *testing.T) {
 	// Simulate remote state
 	remoteState := NewState()
 	remoteState.UpdateHash("db/password", "sha256:abc123") // Same
-	remoteState.UpdateHash("api/key", "sha256:xyz789")    // Different
+	remoteState.UpdateHash("api/key", "sha256:xyz789")     // Different
 
 	plan := GeneratePlan(s, remoteState)
 

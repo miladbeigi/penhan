@@ -15,7 +15,7 @@ username: admin
 password: s3cret
 api_key: abc123
 `
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -38,7 +38,7 @@ func TestParseJSONFile(t *testing.T) {
 	filePath := filepath.Join(dir, "secret.json")
 
 	content := `{"username": "admin", "password": "s3cret"}`
-	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

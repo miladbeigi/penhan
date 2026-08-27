@@ -20,7 +20,7 @@ func NewAESProvider() *AESProvider {
 	return &AESProvider{}
 }
 
-func (p *AESProvider) Setup(keyPath string, passphrase string) error {
+func (p *AESProvider) Setup(keyPath, passphrase string) error {
 	if passphrase != "" {
 		// Fixed salt is acceptable for a local tool - it's a domain separator, not a secret
 		salt := []byte("penhan-salt")
@@ -32,7 +32,7 @@ func (p *AESProvider) Setup(keyPath string, passphrase string) error {
 		}
 		p.key = key
 
-		if err := os.WriteFile(keyPath, key, 0600); err != nil {
+		if err := os.WriteFile(keyPath, key, 0o600); err != nil {
 			return err
 		}
 	}

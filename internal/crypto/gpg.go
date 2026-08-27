@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 
-	"golang.org/x/crypto/openpgp"
-	"golang.org/x/crypto/openpgp/armor"
-	"golang.org/x/crypto/openpgp/packet"
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 )
 
 type GPGProvider struct {
@@ -19,7 +19,7 @@ func NewGPGProvider() *GPGProvider {
 	return &GPGProvider{}
 }
 
-func (p *GPGProvider) Setup(keyPath string, passphrase string) error {
+func (p *GPGProvider) Setup(keyPath, passphrase string) error {
 	cfg := &packet.Config{DefaultHash: crypto.SHA256}
 
 	if _, err := os.Stat(keyPath); os.IsNotExist(err) {

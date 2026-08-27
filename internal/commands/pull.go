@@ -108,11 +108,11 @@ func runPull(cmd *cobra.Command, args []string) error {
 			return err
 		}
 
-		if err := os.MkdirAll(filepath.Dir(localPath+".enc"), 0755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(localPath+".enc"), 0o755); err != nil {
 			return err
 		}
 
-		if err := os.WriteFile(localPath+".enc", encrypted, 0644); err != nil {
+		if err := os.WriteFile(localPath+".enc", encrypted, 0o644); err != nil {
 			return err
 		}
 

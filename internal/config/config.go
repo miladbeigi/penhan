@@ -13,7 +13,7 @@ type Config struct {
 }
 
 type EncryptionConfig struct {
-	Method string   `yaml:"method"`
+	Method string    `yaml:"method"`
 	GPG    GPGConfig `yaml:"gpg,omitempty"`
 	AES    AESConfig `yaml:"aes,omitempty"`
 }
@@ -65,5 +65,5 @@ func Save(cfg *Config, path string) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0o644)
 }

@@ -74,5 +74,5 @@ func WriteFile(path string, data map[string]string) error {
 		return fmt.Errorf("marshal data: %w", err)
 	}
 
-	return os.WriteFile(path, content, 0600)
+	return os.WriteFile(path, content, 0o600)
 }

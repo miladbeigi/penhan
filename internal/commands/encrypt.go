@@ -90,7 +90,7 @@ func encryptFile(path string, provider crypto.Provider) error {
 	}
 
 	encPath := path + ".enc"
-	if err := os.WriteFile(encPath, encrypted, 0644); err != nil {
+	if err := os.WriteFile(encPath, encrypted, 0o644); err != nil {
 		return err
 	}
 

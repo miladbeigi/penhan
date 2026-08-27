@@ -18,7 +18,7 @@ func NewVaultProvider() *VaultProvider {
 	return &VaultProvider{}
 }
 
-func (p *VaultProvider) Setup(addr string, token string, mountPath string, basePath string) error {
+func (p *VaultProvider) Setup(addr, token, mountPath, basePath string) error {
 	p.addr = addr
 	p.token = token
 	p.mountPath = mountPath

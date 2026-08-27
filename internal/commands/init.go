@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/milad/penhan/internal/crypto"
 	"github.com/milad/penhan/internal/config"
+	"github.com/milad/penhan/internal/crypto"
 	"github.com/spf13/cobra"
 )
 
@@ -77,15 +77,15 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create directories
-	if err := os.MkdirAll(".penhan/keys", 0700); err != nil {
+	if err := os.MkdirAll(".penhan/keys", 0o700); err != nil {
 		return fmt.Errorf("create keys directory: %w", err)
 	}
-	if err := os.MkdirAll("secrets", 0700); err != nil {
+	if err := os.MkdirAll("secrets", 0o700); err != nil {
 		return fmt.Errorf("create secrets directory: %w", err)
 	}
 
 	// Save vault token
-	if err := os.WriteFile(".penhan/vault-token", []byte(vaultToken), 0600); err != nil {
+	if err := os.WriteFile(".penhan/vault-token", []byte(vaultToken), 0o600); err != nil {
 		return err
 	}
 
@@ -106,7 +106,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 	// Create state file
 	statePath := filepath.Join(".penhan", "state.json")
 	if _, err := os.Stat(statePath); os.IsNotExist(err) {
-		if err := os.WriteFile(statePath, []byte(`{"version":1,"secrets":{}}`), 0644); err != nil {
+		if err := os.WriteFile(statePath, []byte(`{"version":1,"secrets":{}}`), 0o644); err != nil {
 			return err
 		}
 	}

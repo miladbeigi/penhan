@@ -34,7 +34,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	filePath := filepath.Join(cfg.Secrets.Path, name+"."+cfg.Secrets.Format)
 
 	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
 	}
 

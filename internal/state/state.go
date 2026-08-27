@@ -51,7 +51,7 @@ func Save(s *State, path string) error {
 		return fmt.Errorf("marshal state: %w", err)
 	}
 
-	return os.WriteFile(path, data, 0644)
+	return os.WriteFile(path, data, 0o644)
 }
 
 // UpdateHash sets the local hash for a secret and marks status as local_changed.
