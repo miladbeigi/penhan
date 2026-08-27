@@ -78,6 +78,16 @@ func (s *State) UpdateRemoteHash(path, hash string) {
 	s.Secrets[path] = entry
 }
 
+// SetSynced records a successful sync: both sides now hold content with the given hash.
+func (s *State) SetSynced(path, hash string) {
+	s.Secrets[path] = SecretEntry{
+		LocalHash:  hash,
+		RemoteHash: hash,
+		LastSynced: time.Now(),
+		Status:     "synced",
+	}
+}
+
 // MarkSynced marks a secret as synced and copies remote hash to local.
 func (s *State) MarkSynced(path string) {
 	entry, ok := s.Secrets[path]

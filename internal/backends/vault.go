@@ -103,7 +103,8 @@ func (p *VaultProvider) List(remotePath string) ([]string, error) {
 		return nil, fmt.Errorf("vault provider not initialized")
 	}
 
-	fullPath := p.buildPath(remotePath)
+	// KV v2 only supports LIST on the metadata path, not the data path.
+	fullPath := p.buildPathWithPrefix("metadata", remotePath)
 	if !strings.HasSuffix(fullPath, "/") {
 		fullPath += "/"
 	}
@@ -148,7 +149,11 @@ func (p *VaultProvider) Delete(remotePath string) error {
 }
 
 func (p *VaultProvider) buildPath(remotePath string) string {
-	parts := []string{p.mountPath, "data"}
+	return p.buildPathWithPrefix("data", remotePath)
+}
+
+func (p *VaultProvider) buildPathWithPrefix(prefix, remotePath string) string {
+	parts := []string{p.mountPath, prefix}
 	if p.basePath != "" {
 		parts = append(parts, p.basePath)
 	}

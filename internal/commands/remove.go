@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/milad/penhan/internal/backends"
 	"github.com/milad/penhan/internal/config"
 	"github.com/milad/penhan/internal/secrets"
 	"github.com/milad/penhan/internal/state"
@@ -22,11 +21,13 @@ var removeCmd = &cobra.Command{
 }
 
 func init() {
+	removeCmd.Flags().Bool("force", false, "Skip confirmation prompt")
 	rootCmd.AddCommand(removeCmd)
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {
 	name := args[0]
+	force, _ := cmd.Flags().GetBool("force")
 
 	cfg, err := config.Load("penhan.yaml")
 	if err != nil {
@@ -39,14 +40,16 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("secret not found: %w", err)
 	}
 
-	fmt.Printf("Remove secret %s? (y/N) ", name)
-	reader := bufio.NewReader(os.Stdin)
-	answer, _ := reader.ReadString('\n')
-	answer = strings.TrimSpace(answer)
+	if !force {
+		fmt.Printf("Remove secret %s? (y/N) ", name)
+		reader := bufio.NewReader(os.Stdin)
+		answer, _ := reader.ReadString('\n')
+		answer = strings.TrimSpace(answer)
 
-	if answer != "y" && answer != "Y" {
-		fmt.Println("Aborted")
-		return nil
+		if answer != "y" && answer != "Y" {
+			fmt.Println("Aborted")
+			return nil
+		}
 	}
 
 	if err := os.Remove(filePath); err != nil {
@@ -60,12 +63,8 @@ func runRemove(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	backend := backends.NewVaultProvider()
-	token, err := os.ReadFile(cfg.Backend.Vault.TokenPath)
+	backend, err := newVaultBackend(cfg)
 	if err != nil {
-		return err
-	}
-	if err := backend.Setup(cfg.Backend.Vault.Addr, string(token), cfg.Backend.Vault.MountPath, cfg.Backend.Vault.BasePath); err != nil {
 		return err
 	}
 
@@ -75,13 +74,9 @@ func runRemove(cmd *cobra.Command, args []string) error {
 	}
 
 	statePath := filepath.Join(".penhan", "state.json")
-	s, err := state.Load(statePath)
+	s, err := loadStateOrNew(statePath)
 	if err != nil {
-		if os.IsNotExist(err) {
-			s = state.NewState()
-		} else {
-			return fmt.Errorf("load state: %w", err)
-		}
+		return err
 	}
 
 	delete(s.Secrets, vaultPath)

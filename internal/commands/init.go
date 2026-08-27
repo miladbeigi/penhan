@@ -54,10 +54,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 	vaultToken = strings.TrimSpace(vaultToken)
 
 	// Create config
+	keyPath := filepath.Join(".penhan", "keys", method+".key")
+	encryption := config.EncryptionConfig{Method: method}
+	switch method {
+	case "gpg":
+		encryption.GPG.KeyPath = keyPath
+	case "aes":
+		encryption.AES.KeyPath = keyPath
+	}
 	cfg := &config.Config{
-		Encryption: config.EncryptionConfig{
-			Method: method,
-		},
+		Encryption: encryption,
 		Backend: config.BackendConfig{
 			Type: "vault",
 			Vault: config.VaultConfig{
@@ -99,7 +105,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		provider = crypto.NewAESProvider()
 	}
 
-	keyPath := filepath.Join(".penhan", "keys", method+".key")
 	if err := provider.Setup(keyPath, ""); err != nil {
 		return err
 	}
