@@ -77,8 +77,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create directories
-	os.MkdirAll(".penhan/keys", 0700)
-	os.MkdirAll("secrets", 0700)
+	if err := os.MkdirAll(".penhan/keys", 0700); err != nil {
+		return fmt.Errorf("create keys directory: %w", err)
+	}
+	if err := os.MkdirAll("secrets", 0700); err != nil {
+		return fmt.Errorf("create secrets directory: %w", err)
+	}
 
 	// Save vault token
 	if err := os.WriteFile(".penhan/vault-token", []byte(vaultToken), 0600); err != nil {
