@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path"
 	"strings"
 
 	vault "github.com/hashicorp/vault/api"
@@ -98,6 +99,9 @@ func (p *VaultProvider) Pull(remotePath string) ([]byte, error) {
 	return content, nil
 }
 
+// List returns every secret under remotePath, recursing into KV v2 folders so
+// nested paths like "apps/api-token" are returned in full, never as bare
+// folder names.
 func (p *VaultProvider) List(remotePath string) ([]string, error) {
 	if !p.IsInitialized() {
 		return nil, fmt.Errorf("vault provider not initialized")
@@ -123,11 +127,21 @@ func (p *VaultProvider) List(remotePath string) ([]string, error) {
 		return []string{}, nil
 	}
 
-	var paths []string
+	paths := []string{}
 	for _, key := range keys {
-		if k, ok := key.(string); ok {
-			paths = append(paths, strings.TrimSuffix(k, "/"))
+		k, ok := key.(string)
+		if !ok {
+			continue
 		}
+		if strings.HasSuffix(k, "/") {
+			sub, err := p.List(path.Join(remotePath, strings.TrimSuffix(k, "/")))
+			if err != nil {
+				return nil, err
+			}
+			paths = append(paths, sub...)
+			continue
+		}
+		paths = append(paths, path.Join(remotePath, k))
 	}
 
 	return paths, nil

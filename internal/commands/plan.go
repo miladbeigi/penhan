@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/milad/penhan/internal/config"
@@ -41,12 +42,18 @@ func runPlan(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Fetch remote state from Vault when reachable; plan still works offline.
+	// Fetch remote state from Vault when reachable; plan still works offline,
+	// but never silently — a hidden backend problem looks like a clean plan.
 	remoteState := state.NewState()
-	if backend, err := newVaultBackend(cfg); err == nil {
-		if rs, err := buildRemoteState(s, backend); err == nil {
+	backend, err := newVaultBackend(cfg)
+	if err == nil {
+		var rs *state.State
+		if rs, err = buildRemoteState(s, backend); err == nil {
 			remoteState = rs
 		}
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: could not read remote state, planning against an empty backend: %v\n", err)
 	}
 
 	plan := state.GeneratePlan(buildLocalState(s, local), remoteState)

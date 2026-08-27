@@ -84,7 +84,10 @@ func runPull(cmd *cobra.Command, args []string) error {
 
 		data, err := backend.Pull(remotePath)
 		if err != nil {
-			return err
+			// A deleted version still appears in the listing; skip what
+			// cannot be read instead of aborting the whole pull.
+			fmt.Printf("  Skipped %s: %v\n", remotePath, err)
+			continue
 		}
 
 		encrypted, err := provider.Encrypt(data)
