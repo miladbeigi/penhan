@@ -13,8 +13,7 @@ import (
 )
 
 type AESProvider struct {
-	key     []byte
-	keyPath string
+	key []byte
 }
 
 func NewAESProvider() *AESProvider {
@@ -22,9 +21,8 @@ func NewAESProvider() *AESProvider {
 }
 
 func (p *AESProvider) Setup(keyPath string, passphrase string) error {
-	p.keyPath = keyPath
-
 	if passphrase != "" {
+		// Fixed salt is acceptable for a local tool - it's a domain separator, not a secret
 		salt := []byte("penhan-salt")
 		p.key = pbkdf2.Key([]byte(passphrase), salt, 600000, 32, sha256.New)
 	} else {
