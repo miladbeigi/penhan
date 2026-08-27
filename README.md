@@ -5,18 +5,27 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/milad/penhan)](https://goreportcard.com/report/github.com/milad/penhan)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Git-native secret management with encryption and Vault sync.**
+**Git-native secret management with encryption and multi-backend sync.**
 
-Penhan manages secrets securely using Git as the source of truth. Secrets are stored encrypted in Git repositories and synced to HashiCorp Vault for application consumption.
+Penhan manages secrets securely using Git as the source of truth. Secrets are stored encrypted in Git repositories and synced to your preferred secret backend — HashiCorp Vault, AWS Secrets Manager, or other cloud secret services.
 
 ## Features
 
 - **Git-native** — secrets live in Git, versioned and auditable
 - **Encrypted at rest** — GPG/PGP or AES-256-GCM encryption in the repository
-- **Vault sync** — push secrets to HashiCorp Vault KV v2 for application use
+- **Multi-backend sync** — push secrets to Vault, AWS Secrets Manager, and more
 - **Conflict safety** — Terraform-style plan/apply prevents accidental overwrites
-- **Directory mapping** — local folder structure maps to Vault paths automatically
+- **Directory mapping** — local folder structure maps to backend paths automatically
 - **State tracking** — hash-based conflict detection across local and remote state
+
+## Backends
+
+| Backend | Status |
+|---------|--------|
+| HashiCorp Vault KV v2 | Supported |
+| AWS Secrets Manager | Planned |
+| GCP Secret Manager | Planned |
+| Azure Key Vault | Planned |
 
 ## Install
 
@@ -67,10 +76,10 @@ penhan list
 # See what would change
 penhan plan
 
-# Push secrets to Vault
+# Push secrets to backend
 penhan push
 
-# Pull secrets from Vault
+# Pull secrets from backend
 penhan pull
 ```
 
@@ -80,10 +89,10 @@ penhan pull
 |---------|-------------|
 | `penhan init` | Initialize penhan in the current directory |
 | `penhan add <name>` | Create a new secret |
-| `penhan remove <name>` | Remove a secret from local and Vault |
+| `penhan remove <name>` | Remove a secret from local and backend |
 | `penhan list` | List all secrets and their status |
-| `penhan push` | Encrypt and sync local secrets to Vault |
-| `penhan pull` | Fetch secrets from Vault and decrypt locally |
+| `penhan push` | Encrypt and sync local secrets to backend |
+| `penhan pull` | Fetch secrets from backend and decrypt locally |
 | `penhan plan` | Show what push/pull would do (dry-run) |
 | `penhan encrypt [file\|dir]` | Encrypt secret files in place |
 | `penhan decrypt [file\|dir]` | Decrypt secret files in place |
@@ -108,14 +117,14 @@ my-project/
     └── vault-token
 ```
 
-### Vault Path Mapping
+### Path Mapping
 
-Local paths map to Vault paths automatically:
+Local paths map to backend paths automatically:
 
-| Local Path | Vault Path |
-|------------|------------|
-| `secrets/db/password.yaml` | `secret/data/db/password` |
-| `secrets/api/key.yaml` | `secret/data/api/key` |
+| Local Path | Vault Path | AWS Secrets Manager |
+|------------|------------|---------------------|
+| `secrets/db/password.yaml` | `secret/data/db/password` | `db/password` |
+| `secrets/api/key.yaml` | `secret/data/api/key` | `api/key` |
 
 ### Encryption
 
@@ -129,9 +138,9 @@ Penhan supports two encryption methods:
 Penhan tracks secret state using hashes:
 
 - **new** — secret exists locally but hasn't been pushed
-- **synced** — local and Vault are in sync
+- **synced** — local and remote are in sync
 - **local_changed** — local version differs from last sync
-- **remote_changed** — Vault version differs from last sync
+- **remote_changed** — remote version differs from last sync
 - **conflict** — both sides changed since last sync
 
 ## Configuration
@@ -143,12 +152,15 @@ encryption:
   method: aes  # or "gpg"
 
 backend:
-  type: vault
+  type: vault  # or "aws" (planned)
   vault:
     addr: https://vault.example.com
     token_path: .penhan/vault-token
     mount_path: secret
     base_path: ""
+  # aws:
+  #   region: us-east-1
+  #   prefix: myapp/
 
 secrets:
   path: secrets/

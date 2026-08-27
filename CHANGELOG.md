@@ -30,16 +30,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Add secrets with `penhan add <name>`
 - Remove secrets with `penhan remove <name>`
 - List secrets with `penhan list`
-- Push secrets to Vault with `penhan push`
-- Pull secrets from Vault with `penhan pull`
+- Push secrets to backend with `penhan push`
+- Pull secrets from backend with `penhan pull`
 - Plan changes with `penhan plan` (dry-run)
 - Encrypt files in place with `penhan encrypt`
 - Decrypt files in place with `penhan decrypt`
 - GPG/PGP encryption support via ProtonMail/go-crypto
 - AES-256-GCM encryption support
-- HashiCorp Vault KV v2 backend integration
+- HashiCorp Vault KV v2 backend (first supported backend)
+- Pluggable backend architecture for future providers
 - Terraform-style plan/apply conflict detection
 - Hash-based state management
-- Directory hierarchy to Vault path mapping
+- Directory hierarchy to backend path mapping
 - Config file support (`penhan.yaml`)
 - State file tracking (`.penhan/state.json`)

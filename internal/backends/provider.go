@@ -1,6 +1,7 @@
 package backends
 
 // Provider defines the interface for backend storage providers.
+// Implementations can target any secret storage service (Vault, AWS Secrets Manager, etc.).
 type Provider interface {
 	// Push uploads secret content to the backend.
 	Push(content []byte, remotePath string) error
