@@ -1,4 +1,6 @@
-.PHONY: ci fmt vet lint test build tidy release
+.DEFAULT_GOAL := help
+
+.PHONY: ci fmt vet lint test build tidy release help
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -8,27 +10,24 @@ LDFLAGS := -s -w \
 	-X github.com/milad/penhan/internal/version.Commit=$(COMMIT) \
 	-X github.com/milad/penhan/internal/version.Date=$(DATE)
 
-ci: fmt vet lint test build tidy
+help: ## Show this help message
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "Targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'
 
-fmt:
-	@test -z "$$(gofmt -l .)" || (gofmt -d . && exit 1)
+ci: fmt vet lint test build tidy ## Run all CI checks
 
-vet:
-	go vet ./...
+fmt: ## Check code formatting
 
-lint:
-	golangci-lint run
+vet: ## Run go vet
 
-test:
-	go test ./...
+lint: ## Run golangci-lint
 
-build:
-	go build -ldflags "$(LDFLAGS)" -o penhan ./cmd/penhan
+test: ## Run tests
 
-tidy:
-	go mod tidy
-	@git diff --exit-code go.mod
-	@test ! -f go.sum || git diff --exit-code go.sum
+build: ## Build binary
 
-release:
-	goreleaser release --clean
+tidy: ## Check go mod tidy
+
+release: ## Run GoReleaser to create a release
