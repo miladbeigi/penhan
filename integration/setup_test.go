@@ -188,8 +188,12 @@ func (s *safeBuffer) String() string {
 
 func initProject(t *testing.T, dir string) {
 	t.Helper()
-	input := "aes\nvault\n" + vaultAddr + "\n" + vaultToken + "\n"
-	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte(input), "init")
+	stdout, stderr, code := runPenhan(t, dir, "init",
+		"--encryption=aes",
+		"--backend=vault",
+		"--vault-addr="+vaultAddr,
+		"--vault-token="+vaultToken,
+	)
 	if code != 0 {
 		t.Fatalf("init failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}

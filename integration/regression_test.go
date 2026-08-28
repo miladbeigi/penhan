@@ -136,8 +136,12 @@ func TestListShowsEncryptedOnlySecrets(t *testing.T) {
 
 func TestInitRejectsSchemelessVaultAddress(t *testing.T) {
 	dir := newProject(t)
-	input := "aes\nvault\n0.0.0.0:8200\n" + vaultToken + "\n"
-	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte(input), "init")
+	stdout, stderr, code := runPenhan(t, dir, "init",
+		"--encryption=aes",
+		"--backend=vault",
+		"--vault-addr=0.0.0.0:8200",
+		"--vault-token="+vaultToken,
+	)
 	if code == 0 {
 		t.Fatalf("init must reject a scheme-less vault address, got success: %s", stdout)
 	}
@@ -255,8 +259,12 @@ func TestReinitRefusesExistingProject(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 
-	input := "aes\nvault\n" + vaultAddr + "\n" + vaultToken + "\n"
-	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte(input), "init")
+	stdout, stderr, code := runPenhan(t, dir, "init",
+		"--encryption=aes",
+		"--backend=vault",
+		"--vault-addr="+vaultAddr,
+		"--vault-token="+vaultToken,
+	)
 	if code == 0 {
 		t.Fatalf("re-init must refuse to overwrite an existing project: %s", stdout)
 	}

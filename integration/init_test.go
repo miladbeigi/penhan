@@ -12,9 +12,12 @@ import (
 func TestInitCreatesProjectStructure(t *testing.T) {
 	dir := newProject(t)
 
-	stdout, stderr, code := runPenhanWithStdin(t, dir,
-		[]byte("aes\nvault\n"+vaultAddr+"\n"+vaultToken+"\n"),
-		"init")
+	stdout, stderr, code := runPenhan(t, dir, "init",
+		"--encryption=aes",
+		"--backend=vault",
+		"--vault-addr="+vaultAddr,
+		"--vault-token="+vaultToken,
+	)
 	if code != 0 {
 		t.Fatalf("init failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}
