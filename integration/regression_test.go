@@ -72,7 +72,7 @@ func TestPullSurvivesRemovedSecret(t *testing.T) {
 	addSecret(t, dir, "survivor", "hello")
 	mustPush(t, dir)
 
-	if _, _, code := runPenhan(t, dir, "remove", "doomed", "--force"); code != 0 {
+	if _, _, code := runPenhan(t, dir, "remove", "secrets/doomed.yaml", "--force"); code != 0 {
 		t.Fatal("remove failed")
 	}
 
@@ -269,7 +269,7 @@ func TestErrorsDoNotPrintUsage(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 
-	stdout, stderr, code := runPenhan(t, dir, "remove", "ghost", "--force")
+	stdout, stderr, code := runPenhan(t, dir, "remove", "secrets/ghost.yaml", "--force")
 	if code == 0 {
 		t.Fatal("removing a missing secret must fail")
 	}
