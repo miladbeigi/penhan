@@ -104,6 +104,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	partial := &prompt.InitAnswers{}
 
 	if v, _ := cmd.Flags().GetString("encryption"); v != "" {
+		if v != "gpg" && v != "aes" {
+			return fmt.Errorf("invalid encryption method: %s (must be gpg or aes)", v)
+		}
 		partial.Encryption = v
 	}
 	if v, _ := cmd.Flags().GetString("backend"); v != "" {
