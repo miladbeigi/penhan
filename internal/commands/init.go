@@ -127,7 +127,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 		partial.VaultToken = strings.TrimSpace(string(data))
 	} else if v, _ := cmd.Flags().GetString("vault-token"); v != "" {
-		fmt.Fprintln(os.Stderr, "Warning: --vault-token is visible in shell history. Prefer --vault-token-file.")
+		fmt.Fprintln(os.Stderr, "\033[33mWarning: --vault-token is visible in shell history. Prefer --vault-token-file.\033[0m")
 		partial.VaultToken = v
 	}
 
