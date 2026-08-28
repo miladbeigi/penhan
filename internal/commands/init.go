@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	_ "github.com/charmbracelet/huh"
 	"github.com/milad/penhan/internal/config"
 	"github.com/milad/penhan/internal/crypto"
 	"github.com/milad/penhan/internal/state"
