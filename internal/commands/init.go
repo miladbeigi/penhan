@@ -107,6 +107,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 		partial.Encryption = v
 	}
 	if v, _ := cmd.Flags().GetString("backend"); v != "" {
+		if v != "vault" {
+			return fmt.Errorf("unsupported backend: %s (only vault is supported)", v)
+		}
 		partial.Backend = v
 	}
 	if v, _ := cmd.Flags().GetString("vault-addr"); v != "" {
