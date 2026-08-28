@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"bufio"
 	"fmt"
 	"net/url"
 	"os"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/milad/penhan/internal/config"
 	"github.com/milad/penhan/internal/crypto"
+	"github.com/milad/penhan/internal/prompt"
 	"github.com/milad/penhan/internal/state"
 	"github.com/spf13/cobra"
 )
@@ -87,6 +87,11 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
+	initCmd.Flags().String("encryption", "", "Encryption method (gpg/aes)")
+	initCmd.Flags().String("backend", "", "Backend type (vault)")
+	initCmd.Flags().String("vault-addr", "", "Vault address")
+	initCmd.Flags().String("vault-token", "", "Vault token (prefer --vault-token-file)")
+	initCmd.Flags().String("vault-token-file", "", "Path to file containing Vault token")
 	rootCmd.AddCommand(initCmd)
 }
 
@@ -95,40 +100,64 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("penhan.yaml already exists; this directory is already initialized")
 	}
 
-	reader := bufio.NewReader(os.Stdin)
+	// Build partial answers from flags
+	partial := &prompt.InitAnswers{}
 
-	// Ask for encryption method
-	fmt.Print("Encryption method (gpg/aes): ")
-	method, _ := reader.ReadString('\n')
-	method = strings.TrimSpace(method)
-
-	if method != "gpg" && method != "aes" {
-		return fmt.Errorf("invalid encryption method: %s", method)
+	if v, _ := cmd.Flags().GetString("encryption"); v != "" {
+		partial.Encryption = v
+	}
+	if v, _ := cmd.Flags().GetString("backend"); v != "" {
+		partial.Backend = v
+	}
+	if v, _ := cmd.Flags().GetString("vault-addr"); v != "" {
+		partial.VaultAddr = v
 	}
 
-	// Ask for backend
-	fmt.Print("Backend type (vault): ")
-	backendType, _ := reader.ReadString('\n')
-	backendType = strings.TrimSpace(backendType)
-
-	if backendType != "vault" {
-		return fmt.Errorf("unsupported backend: %s", backendType)
+	// Token resolution: file > token > prompt
+	if v, _ := cmd.Flags().GetString("vault-token-file"); v != "" {
+		data, err := os.ReadFile(v)
+		if err != nil {
+			return fmt.Errorf("reading vault token file: %w", err)
+		}
+		partial.VaultToken = strings.TrimSpace(string(data))
+	} else if v, _ := cmd.Flags().GetString("vault-token"); v != "" {
+		fmt.Fprintln(os.Stderr, "Warning: --vault-token is visible in shell history. Prefer --vault-token-file.")
+		partial.VaultToken = v
 	}
 
-	// Ask for Vault config
-	fmt.Print("Vault address: ")
-	vaultAddr, _ := reader.ReadString('\n')
-	vaultAddr = strings.TrimSpace(vaultAddr)
+	// Non-TTY check
+	if info, err := os.Stdin.Stat(); err == nil && (info.Mode()&os.ModeCharDevice) == 0 {
+		var missing []string
+		if partial.Encryption == "" {
+			missing = append(missing, "--encryption")
+		}
+		if partial.Backend == "" {
+			missing = append(missing, "--backend")
+		}
+		if partial.VaultAddr == "" {
+			missing = append(missing, "--vault-addr")
+		}
+		if partial.VaultToken == "" {
+			missing = append(missing, "--vault-token or --vault-token-file")
+		}
+		if len(missing) > 0 {
+			return fmt.Errorf("non-interactive mode requires all flags; missing: %s", strings.Join(missing, ", "))
+		}
+	}
 
-	if err := validateVaultAddress(vaultAddr); err != nil {
+	// Fill gaps via interactive prompts
+	answers, err := prompt.RunInitPrompts(partial)
+	if err != nil {
 		return err
 	}
 
-	fmt.Print("Vault token: ")
-	vaultToken, _ := reader.ReadString('\n')
-	vaultToken = strings.TrimSpace(vaultToken)
+	// Validate vault address
+	if err := validateVaultAddress(answers.VaultAddr); err != nil {
+		return err
+	}
 
 	// Create config
+	method := answers.Encryption
 	keyPath := filepath.Join(".penhan", "keys", method+".key")
 	encryption := config.EncryptionConfig{Method: method}
 	switch method {
@@ -142,7 +171,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 		Backend: config.BackendConfig{
 			Type: "vault",
 			Vault: config.VaultConfig{
-				Addr:      vaultAddr,
+				Addr:      answers.VaultAddr,
 				TokenPath: ".penhan/vault-token",
 				MountPath: "secret",
 			},
@@ -153,12 +182,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	// Save config
 	if err := config.Save(cfg, "penhan.yaml"); err != nil {
 		return err
 	}
 
-	// Create directories
 	if err := os.MkdirAll(".penhan/keys", 0o700); err != nil {
 		return fmt.Errorf("create keys directory: %w", err)
 	}
@@ -166,12 +193,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("create secrets directory: %w", err)
 	}
 
-	// Save vault token
-	if err := os.WriteFile(".penhan/vault-token", []byte(vaultToken), 0o600); err != nil {
+	if err := os.WriteFile(".penhan/vault-token", []byte(answers.VaultToken), 0o600); err != nil {
 		return err
 	}
 
-	// Setup encryption provider
 	var provider crypto.Provider
 	switch method {
 	case "gpg":
@@ -184,7 +209,6 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Create state file
 	statePath := filepath.Join(".penhan", "state.json")
 	if _, err := os.Stat(statePath); os.IsNotExist(err) {
 		s := state.NewState()
@@ -197,10 +221,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("✓ Generated %s key at %s\n", strings.ToUpper(method), keyPath)
 	fmt.Printf("✓ Created penhan.yaml\n")
 
-	secretsDir := strings.TrimSuffix(cfg.Secrets.Path, "/")
 	gitignoreEntries := []string{
-		secretsDir + "/*.yaml",
-		secretsDir + "/*.yml",
+		"secrets/*.yaml",
+		"secrets/*.yml",
 		".penhan/keys/",
 		".penhan/vault-token",
 		".penhan/config.yaml",
