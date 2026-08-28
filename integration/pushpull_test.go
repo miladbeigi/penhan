@@ -105,13 +105,16 @@ func TestRemoveDeletesSecret(t *testing.T) {
 	writeSecret(t, dir, "del.yaml", "v: gone\n")
 	mustPush(t, dir)
 
-	stdout, stderr, code := runPenhan(t, dir, "remove", "del", "--force")
+	stdout, stderr, code := runPenhan(t, dir, "remove", "secrets/del.yaml", "--force")
 	if code != 0 {
 		t.Fatalf("remove failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}
 
 	if _, err := os.Stat(filepath.Join(dir, "secrets", "del.yaml")); !os.IsNotExist(err) {
-		t.Errorf("expected secret file removed, got err=%v", err)
+		t.Errorf("expected plaintext secret removed, got err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "secrets", "del.yaml.enc")); !os.IsNotExist(err) {
+		t.Errorf("expected encrypted secret removed, got err=%v", err)
 	}
 
 	if data, err := readVaultDataIfPresent(t, "del"); err == nil && len(data) > 0 {
