@@ -8,11 +8,68 @@ import (
 	"path/filepath"
 	"strings"
 
+	_ "github.com/charmbracelet/huh"
 	"github.com/milad/penhan/internal/config"
 	"github.com/milad/penhan/internal/crypto"
 	"github.com/milad/penhan/internal/state"
 	"github.com/spf13/cobra"
 )
+
+// appendGitignore ensures the given entries are present in .gitignore.
+// It creates the file if it does not exist, and appends missing entries
+// to an existing file without duplicating lines that are already there.
+func appendGitignore(entries []string) error {
+	const path = ".gitignore"
+
+	var existing map[string]bool
+	data, err := os.ReadFile(path)
+	if err == nil {
+		existing = make(map[string]bool)
+		for _, line := range strings.Split(string(data), "\n") {
+			line = strings.TrimSpace(line)
+			if line != "" {
+				existing[line] = true
+			}
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("reading .gitignore: %w", err)
+	}
+
+	var toAdd []string
+	for _, entry := range entries {
+		if !existing[entry] {
+			toAdd = append(toAdd, entry)
+		}
+	}
+
+	if len(toAdd) == 0 {
+		return nil
+	}
+
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("opening .gitignore: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	// Add leading newline if file already has content and doesn't end with one
+	if len(existing) > 0 {
+		content := string(data)
+		if !strings.HasSuffix(content, "\n") {
+			if _, err := f.WriteString("\n"); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, entry := range toAdd {
+		if _, err := f.WriteString(entry + "\n"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
 
 // validateVaultAddress rejects addresses the Vault client would only choke on
 // much later (e.g. "0.0.0.0:8200" fails at first push with a cryptic URL error).
@@ -140,6 +197,20 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Printf("✓ Initialized penhan in current directory\n")
 	fmt.Printf("✓ Generated %s key at %s\n", strings.ToUpper(method), keyPath)
 	fmt.Printf("✓ Created penhan.yaml\n")
+
+	secretsDir := strings.TrimSuffix(cfg.Secrets.Path, "/")
+	gitignoreEntries := []string{
+		secretsDir + "/*.yaml",
+		secretsDir + "/*.yml",
+		".penhan/keys/",
+		".penhan/vault-token",
+		".penhan/config.yaml",
+		".penhan/state.json",
+	}
+	if err := appendGitignore(gitignoreEntries); err != nil {
+		return fmt.Errorf("updating .gitignore: %w", err)
+	}
+	fmt.Printf("✓ Updated .gitignore\n")
 
 	return nil
 }
