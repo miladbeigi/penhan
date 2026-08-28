@@ -136,8 +136,12 @@ func TestListShowsEncryptedOnlySecrets(t *testing.T) {
 
 func TestInitRejectsSchemelessVaultAddress(t *testing.T) {
 	dir := newProject(t)
-	input := "aes\nvault\n0.0.0.0:8200\n" + vaultToken + "\n"
-	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte(input), "init")
+	stdout, stderr, code := runPenhan(t, dir, "init",
+		"--encryption=aes",
+		"--backend=vault",
+		"--vault-addr=0.0.0.0:8200",
+		"--vault-token="+vaultToken,
+	)
 	if code == 0 {
 		t.Fatalf("init must reject a scheme-less vault address, got success: %s", stdout)
 	}
@@ -255,8 +259,12 @@ func TestReinitRefusesExistingProject(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 
-	input := "aes\nvault\n" + vaultAddr + "\n" + vaultToken + "\n"
-	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte(input), "init")
+	stdout, stderr, code := runPenhan(t, dir, "init",
+		"--encryption=aes",
+		"--backend=vault",
+		"--vault-addr="+vaultAddr,
+		"--vault-token="+vaultToken,
+	)
 	if code == 0 {
 		t.Fatalf("re-init must refuse to overwrite an existing project: %s", stdout)
 	}
@@ -288,5 +296,87 @@ func TestAddWarnsOnEmptyValue(t *testing.T) {
 	}
 	if !strings.Contains(strings.ToLower(stdout+stderr), "warning") {
 		t.Errorf("add must warn about an empty value: stdout=%s stderr=%s", stdout, stderr)
+	}
+}
+
+func TestInitNonTTYMissingFlags(t *testing.T) {
+	dir := newProject(t)
+
+	// Simulate non-TTY by piping empty stdin with no flags
+	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte(""), "init")
+	if code == 0 {
+		t.Fatal("non-TTY init with missing flags must fail")
+	}
+	output := stdout + stderr
+	if !strings.Contains(output, "non-interactive") {
+		t.Errorf("error should mention non-interactive mode: %s", output)
+	}
+	if !strings.Contains(output, "--encryption") {
+		t.Errorf("error should list --encryption as missing: %s", output)
+	}
+}
+
+func TestInitInvalidEncryption(t *testing.T) {
+	dir := newProject(t)
+
+	stdout, stderr, code := runPenhan(t, dir, "init",
+		"--encryption=rot13",
+		"--backend=vault",
+		"--vault-addr="+vaultAddr,
+		"--vault-token="+vaultToken,
+	)
+	if code == 0 {
+		t.Fatal("init must reject invalid encryption method")
+	}
+	if !strings.Contains(stdout+stderr, "rot13") {
+		t.Errorf("error should mention the invalid value: %s", stdout)
+	}
+}
+
+func TestInitInvalidBackend(t *testing.T) {
+	dir := newProject(t)
+
+	stdout, stderr, code := runPenhan(t, dir, "init",
+		"--encryption=aes",
+		"--backend=dynamo",
+		"--vault-addr="+vaultAddr,
+		"--vault-token="+vaultToken,
+	)
+	if code == 0 {
+		t.Fatal("init must reject invalid backend")
+	}
+	if !strings.Contains(stdout+stderr, "dynamo") {
+		t.Errorf("error should mention the invalid backend: %s", stdout)
+	}
+}
+
+func TestInitVaultTokenFile(t *testing.T) {
+	dir := newProject(t)
+
+	tokenPath := filepath.Join(dir, ".penhan", "test-token")
+	if err := os.MkdirAll(filepath.Dir(tokenPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(tokenPath, []byte("file-token-value\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	stdout, stderr, code := runPenhan(t, dir, "init",
+		"--encryption=aes",
+		"--backend=vault",
+		"--vault-addr="+vaultAddr,
+		"--vault-token-file="+tokenPath,
+	)
+	if code != 0 {
+		t.Fatalf("init with --vault-token-file failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+
+	vaultTokenPath := filepath.Join(dir, ".penhan", "vault-token")
+	data, err := os.ReadFile(vaultTokenPath)
+	if err != nil {
+		t.Fatalf("vault-token not created: %v", err)
+	}
+	if string(data) != "file-token-value" {
+		t.Errorf("vault-token content = %q, want %q", string(data), "file-token-value")
 	}
 }

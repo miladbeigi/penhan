@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/milad/penhan/internal/config"
+	"github.com/milad/penhan/internal/prompt"
 	"github.com/milad/penhan/internal/secrets"
 	"github.com/milad/penhan/internal/state"
 	"github.com/spf13/cobra"
@@ -193,7 +193,6 @@ func runRemove(cmd *cobra.Command, args []string) error {
 }
 
 func runRemoveInteractive(cfg *config.Config, secretsDir string, force bool) error {
-	// Check for TTY
 	if info, err := os.Stdin.Stat(); err == nil && (info.Mode()&os.ModeCharDevice) == 0 {
 		return fmt.Errorf("interactive mode requires a TTY; pass a file path or use --force with a path")
 	}
@@ -207,22 +206,12 @@ func runRemoveInteractive(cfg *config.Config, secretsDir string, force bool) err
 		return nil
 	}
 
-	// Display numbered list
-	for i, vaultPath := range entries {
-		fmt.Printf("  %d) %s\n", i+1, vaultPath)
+	selected, err := prompt.RunRemoveSelect(entries)
+	if err != nil {
+		return err
 	}
 
-	fmt.Print("\nEnter number to remove: ")
-	reader := bufio.NewReader(os.Stdin)
-	answer, _ := reader.ReadString('\n')
-	answer = strings.TrimSpace(answer)
-
-	idx, err := strconv.Atoi(answer)
-	if err != nil || idx < 1 || idx > len(entries) {
-		return fmt.Errorf("invalid selection: %s", answer)
-	}
-
-	vaultPath := entries[idx-1]
+	vaultPath := selected
 	plaintext := filepath.Join(secretsDir, vaultPath+"."+cfg.Secrets.Format)
 	encPath := plaintext + ".enc"
 
