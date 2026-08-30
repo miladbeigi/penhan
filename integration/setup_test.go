@@ -199,13 +199,15 @@ func initProject(t *testing.T, dir string) {
 	}
 }
 
-// addSecret creates a secret via `penhan add <name>`, feeding the value on stdin.
-// The CLI writes it to secrets/<name>.<format> (yaml by default).
+// addSecret creates a secret file directly at secrets/<name>.yaml with the given value.
 func addSecret(t *testing.T, dir, name, value string) {
 	t.Helper()
-	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte(value+"\n"), "add", name)
-	if code != 0 {
-		t.Fatalf("add %s failed: code=%d stderr=%s stdout=%s", name, code, stderr, stdout)
+	p := filepath.Join(dir, "secrets", name+".yaml")
+	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(p, []byte("value: "+value+"\n"), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

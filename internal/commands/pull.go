@@ -48,7 +48,11 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	plan := state.GeneratePlan(state.NewState(), s)
+	remoteState, err := fetchRemoteState(backend)
+	if err != nil {
+		return err
+	}
+	plan := state.GeneratePlan(remoteState, s)
 
 	fmt.Println("Plan:")
 	fmt.Printf("  + %d to add\n", plan.Add)

@@ -6,3 +6,6 @@
 docs/
 penhan.tar.gz
 penhan
+
+# Testing Folder
+.test/

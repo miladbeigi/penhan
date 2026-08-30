@@ -148,6 +148,24 @@ func buildRemoteState(prev *state.State, backend *backends.VaultProvider) (*stat
 	return remoteState, nil
 }
 
+// fetchRemoteState reads all secrets from the backend without change detection.
+// Used by pull where we want to accept remote as-is.
+func fetchRemoteState(backend *backends.VaultProvider) (*state.State, error) {
+	remoteState := state.NewState()
+	paths, err := backend.List("")
+	if err != nil {
+		return nil, err
+	}
+	for _, path := range paths {
+		content, err := backend.Pull(path)
+		if err != nil {
+			continue
+		}
+		remoteState.Secrets[path] = state.SecretEntry{LocalHash: hashContent(content)}
+	}
+	return remoteState, nil
+}
+
 func hashContent(content []byte) string {
 	return fmt.Sprintf("sha256:%x", sha256.Sum256(content))
 }

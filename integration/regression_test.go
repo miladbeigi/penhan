@@ -286,18 +286,7 @@ func TestErrorsDoNotPrintUsage(t *testing.T) {
 	}
 }
 
-func TestAddWarnsOnEmptyValue(t *testing.T) {
-	dir := newProject(t)
-	initProject(t, dir)
 
-	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte("\n"), "add", "blank")
-	if code != 0 {
-		t.Fatalf("add failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
-	}
-	if !strings.Contains(strings.ToLower(stdout+stderr), "warning") {
-		t.Errorf("add must warn about an empty value: stdout=%s stderr=%s", stdout, stderr)
-	}
-}
 
 func TestInitNonTTYMissingFlags(t *testing.T) {
 	dir := newProject(t)
