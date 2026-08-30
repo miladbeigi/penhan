@@ -14,13 +14,15 @@ go test ./...                # Unit tests only
 make test-integration        # Integration tests (requires Docker)
 ```
 
-**Before committing:** Always run `go mod tidy && git diff --exit-code go.mod go.sum`. New direct imports must be moved from `// indirect` to direct in `go.mod` — CI's "Module tidy check" enforces this.
+**Before committing:** Always run all ci checks locally.
 
 ## Integration Tests
 
 Integration tests require Docker and Vault:
+
 ```bash
 make test-integration    # Starts Vault, runs tests, stops Vault
+
 # or manually:
 cd integration && docker compose up -d
 go test -tags=integration ./integration/...
@@ -38,28 +40,6 @@ internal/
   prompt/            # TUI prompts (charmbracelet/huh)
   secrets/           # YAML/JSON parsing
   state/             # Sync state tracking (hash-based conflict detection)
-```
-
-## Key Concepts
-
-- **State files:** `.penhan/state.json` tracks synced secrets via hash comparison
-- **Conflict detection:** `GeneratePlan()` compares local vs remote hashes
-- **Encrypted files:** `.enc` suffix; `.yaml`/`.yml`/`.json` for plaintext
-- **Vault paths:** `secret/<base_path>/<relative_path>` (e.g., `secret/myapp/db/password`)
-
-## Important Conventions
-
-- New direct imports require `go mod tidy` before commit
-- `golangci-lint v2.13.2` is the linter version (see CI workflow)
-- Use `--force` flag for push/pull to override conflicts
-- `safe add` creates a new safe; secrets live under `secrets/` directory
-
-## Secrets File Format
-
-Secrets are YAML/JSON files with simple key-value pairs:
-```yaml
-password: mysecret123
-api_key: abc123
 ```
 
 ## Testing Single Components
