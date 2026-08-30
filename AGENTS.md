@@ -1,0 +1,51 @@
+# Agent Instructions for Penhan
+
+## Running CI Checks Locally
+
+```bash
+make ci
+```
+
+Or run individually:
+```bash
+go build ./cmd/penhan       # Build
+go vet ./...                 # Vet
+go test ./...                # Unit tests only
+make test-integration        # Integration tests (requires Docker)
+```
+
+**Before committing:** Always run all ci checks locally.
+
+## Integration Tests
+
+Integration tests require Docker and Vault:
+
+```bash
+make test-integration    # Starts Vault, runs tests, stops Vault
+
+# or manually:
+cd integration && docker compose up -d
+go test -tags=integration ./integration/...
+```
+
+## Project Structure
+
+```
+cmd/penhan/          # CLI entrypoint (Cobra)
+internal/
+  backends/          # Vault provider (KV v2)
+  commands/          # CLI commands (add, remove, push, pull, plan, etc.)
+  config/            # YAML config parsing
+  crypto/            # GPG/AES encryption providers
+  prompt/            # TUI prompts (charmbracelet/huh)
+  secrets/           # YAML/JSON parsing
+  state/             # Sync state tracking (hash-based conflict detection)
+```
+
+## Testing Single Components
+
+```bash
+go test ./internal/state/...     # Single package
+go test -run TestPush ./...      # Single test
+go test -tags=integration -run TestPull ./integration/...  # Single integration test
+```
