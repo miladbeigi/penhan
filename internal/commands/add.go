@@ -1,11 +1,9 @@
 package commands
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/milad/penhan/internal/config"
 	"github.com/milad/penhan/internal/secrets"
@@ -42,17 +40,8 @@ func runAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("secret already exists: %s", filePath)
 	}
 
-	fmt.Printf("Enter value for %s: ", name)
-	reader := bufio.NewReader(os.Stdin)
-	value, _ := reader.ReadString('\n')
-	value = strings.TrimSpace(value)
-
-	if value == "" {
-		fmt.Println("warning: empty value for secret")
-	}
-
 	data := map[string]string{
-		"value": value,
+		"key": "value",
 	}
 
 	if err := secrets.WriteFile(filePath, data); err != nil {

@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/milad/penhan/internal/config"
 	"github.com/milad/penhan/internal/prompt"
 	"github.com/milad/penhan/internal/secrets"
@@ -56,23 +57,20 @@ func removeSecretFilesAndState(plaintext, encPath, secretsDir string, force bool
 		return fmt.Errorf("secret not found: %s (neither plaintext nor encrypted variant exists)", plaintext)
 	}
 
-	// Determine what will be removed
-	var targets []string
-	if plaintextExists {
-		targets = append(targets, plaintext)
-	}
-	if encExists {
-		targets = append(targets, encPath)
-	}
-
 	vaultPath := secrets.LocalToVault(plaintext, secretsDir)
-	targets = append(targets, fmt.Sprintf("vault entry: %s", vaultPath))
+
+	localLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("local:")
+	vaultLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Render("vault:")
 
 	if !force {
-		fmt.Println("The following will be removed:")
-		for _, t := range targets {
-			fmt.Printf("  - %s\n", t)
+		fmt.Printf("The following will be removed:\n")
+		if plaintextExists {
+			fmt.Printf("  - %s %s\n", localLabel, plaintext)
 		}
+		if encExists {
+			fmt.Printf("  - %s %s\n", localLabel, encPath)
+		}
+		fmt.Printf("  - %s %s\n", vaultLabel, vaultPath)
 		fmt.Print("\nConfirm? (y/N) ")
 		reader := bufio.NewReader(os.Stdin)
 		answer, _ := reader.ReadString('\n')
@@ -116,8 +114,7 @@ func removeSecretFilesAndState(plaintext, encPath, secretsDir string, force bool
 		return err
 	}
 
-	displayName := filepath.Base(plaintext)
-	fmt.Printf("✓ Removed secret: %s\n", displayName)
+	fmt.Printf("✓ Removed secret: %s\n", vaultPath)
 	return nil
 }
 
