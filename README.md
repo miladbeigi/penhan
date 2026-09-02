@@ -6,13 +6,14 @@
 
 **Git-native secret management with encryption and multi-backend sync.**
 
-Penhan manages secrets securely using Git as the source of truth. Secrets are stored encrypted in Git repositories and synced to your preferred secret backend — HashiCorp Vault, AWS Secrets Manager, or other cloud secret services.
+Penhan manages secrets securely using Git as the source of truth. Secrets are stored encrypted in Git repositories and synced to your secret backend — HashiCorp Vault today, with more backends planned.
 
 ## Features
 
 - **Git-native** — secrets live in Git, versioned and auditable
-- **Encrypted at rest** — GPG/PGP or AES-256-GCM encryption in the repository
-- **Multi-backend sync** — push secrets to Vault, AWS Secrets Manager, and more
+- **Encrypted at rest** — GPG/PGP, AES-256-GCM, or GitHub GPG keys
+- **Multi-backend sync** — push secrets to Vault (more backends planned)
+- **Named safes** — multiple isolated secret directories sharing one backend
 - **Conflict safety** — Terraform-style plan/apply prevents accidental overwrites
 - **Directory mapping** — local folder structure maps to backend paths automatically
 - **State tracking** — hash-based conflict detection across local and remote state
@@ -46,7 +47,7 @@ sudo mv penhan /usr/local/bin/
 
 ### Go Install
 
-Requires Go 1.25+:
+Requires Go 1.26+:
 
 ```bash
 go install github.com/miladbeigi/penhan/cmd/penhan@latest
@@ -63,14 +64,21 @@ make build
 ## Quick Start
 
 ```bash
-# Initialize penhan in your project
+# Initialize penhan in your project (interactive)
 penhan init
 
-# Add a secret
+# Or non-interactively with flags
+penhan init \
+  --encryption=aes \
+  --backend=vault \
+  --vault-addr=https://vault.example.com \
+  --vault-token-file=./vault-token
+
+# Add a secret (creates secrets/db/password.yaml with a placeholder)
 penhan add db/password
 
-# List secrets
-penhan list
+# Edit the secret file, then encrypt it in place for committing to Git
+penhan encrypt
 
 # See what would change
 penhan plan
@@ -88,13 +96,15 @@ penhan pull
 |---------|-------------|
 | `penhan init` | Initialize penhan in the current directory |
 | `penhan add <name>` | Create a new secret |
-| `penhan remove <name>` | Remove a secret from local and backend |
+| `penhan remove [name]` | Remove a secret from local and backend (`--force` skips the confirmation) |
 | `penhan list` | List all secrets and their status |
-| `penhan push` | Encrypt and sync local secrets to backend |
-| `penhan pull` | Fetch secrets from backend and decrypt locally |
+| `penhan push` | Encrypt and sync local secrets to backend (`--force` overrides conflicts) |
+| `penhan pull` | Fetch secrets from backend and decrypt locally (`--force` overrides conflicts) |
 | `penhan plan` | Show what push/pull would do (dry-run) |
-| `penhan encrypt [file\|dir]` | Encrypt secret files in place |
-| `penhan decrypt [file\|dir]` | Decrypt secret files in place |
+| `penhan encrypt [file\|dir]` | Encrypt secret files in place (defaults to the secrets directory) |
+| `penhan decrypt [file\|dir]` | Decrypt secret files in place (defaults to the secrets directory) |
+| `penhan safe add [name]` | Create and initialize a new named safe |
+| `penhan safe list` | List safes in the current directory |
 | `penhan version` | Print version information |
 
 ## How It Works
@@ -103,34 +113,52 @@ penhan pull
 
 ```
 my-project/
-├── penhan.yaml              # Penhan configuration
-├── secrets/                 # Secret files (encrypted in Git)
+├── penhan.yaml                # Penhan configuration (committed)
+├── secrets/                   # Secret files (the *.enc copies are committed)
 │   ├── db/
-│   │   └── password.yaml
+│   │   └── password.yaml.enc  # Encrypted file in Git
 │   └── api/
-│       └── key.yaml
-└── .penhan/                 # Penhan state (gitignored)
+│       └── key.yaml.enc
+└── .penhan/                   # Penhan state (gitignored)
     ├── state.json
     ├── keys/
-    │   └── aes.key
+    │   └── aes.key            # Key file named after the encryption method
     └── vault-token
 ```
+
+You edit the plaintext file (created by `add`, `pull`, or `decrypt`); `encrypt` replaces it with the `.enc` copy, and `push` syncs it to the backend.
+
+### Safes
+
+`penhan safe add <name>` creates a named safe — a subdirectory with its own `penhan.yaml`, `secrets/`, and `.penhan/` state:
+
+```bash
+penhan safe add myapp    # creates ./myapp with its own config and keys
+penhan safe list         # lists safes found in the current directory
+```
+
+Each safe sets `backend.vault.base_path` to its name, so multiple safes can share one Vault backend without path collisions.
 
 ### Path Mapping
 
 Local paths map to backend paths automatically:
 
-| Local Path | Vault Path | AWS Secrets Manager |
-|------------|------------|---------------------|
-| `secrets/db/password.yaml` | `secret/data/db/password` | `db/password` |
-| `secrets/api/key.yaml` | `secret/data/api/key` | `api/key` |
+| Local Path | Vault Path |
+|------------|------------|
+| `secrets/db/password.yaml` | `secret/data/db/password` |
+| `secrets/api/key.yaml` | `secret/data/api/key` |
+
+The Vault path is `{mount_path}/data/{base_path}/{secret path}`. `base_path` is empty for `penhan init` and set to the safe name for `penhan safe add`.
 
 ### Encryption
 
-Penhan supports two encryption methods:
+Penhan supports three encryption methods:
 
-- **GPG/PGP** — uses your GPG keypair for encryption
-- **AES-256-GCM** — symmetric encryption with a generated key
+- **`gpg`** — uses your GPG keypair for encryption
+- **`github-gpg`** — fetches your public key from `https://github.com/<username>.gpg` and encrypts with it; seal-only, so decrypting requires your private key on the local machine
+- **`aes`** — symmetric AES-256-GCM encryption with a generated key stored under `.penhan/keys/`
+
+Secret files are flat YAML or JSON key-value pairs (`.yaml`, `.yml`, or `.json`); nested maps or lists are rejected.
 
 ### State Management
 
@@ -140,26 +168,28 @@ Penhan tracks secret state using hashes:
 - **synced** — local and remote are in sync
 - **local_changed** — local version differs from last sync
 - **remote_changed** — remote version differs from last sync
-- **conflict** — both sides changed since last sync
+- **conflict** — both sides changed since last sync (requires `--force` to override)
 
 ## Configuration
 
-`penhan.yaml` in your project root:
+`penhan.yaml` in your project root (generated by `penhan init`):
 
 ```yaml
 encryption:
-  method: aes  # or "gpg"
+  method: aes          # gpg, github-gpg, or aes
+  aes:
+    key_path: .penhan/keys/aes.key
+  # gpg:
+  #   key_path: .penhan/keys/gpg.key
+  #   github_username: yourname  # required for github-gpg
 
 backend:
-  type: vault  # or "aws" (planned)
+  type: vault
   vault:
     addr: https://vault.example.com
     token_path: .penhan/vault-token
     mount_path: secret
-    base_path: ""
-  # aws:
-  #   region: us-east-1
-  #   prefix: myapp/
+    base_path: ""      # set to the safe name when initialized via `safe add`
 
 secrets:
   path: secrets/
@@ -169,7 +199,7 @@ secrets:
 ## Development
 
 ```bash
-# Run tests
+# Run unit tests
 make test
 
 # Run all CI checks
@@ -180,6 +210,12 @@ make build
 
 # Run linter
 make lint
+
+# Run integration tests (requires Docker)
+make test-integration
+
+# Run e2e tests: real CLI against throwaway Vault containers (requires Docker)
+make test-e2e
 ```
 
 ## Release Process
