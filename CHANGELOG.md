@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Removed
 
+- `penhan remove`: delete the secret file from the secrets directory instead; removal from the backend is left to the backend's own tooling
 - `penhan add`: secrets are plain files, so create them directly under the secrets directory (e.g. `secrets/db/password.yaml`) instead of via a command
 
 ## [0.4.0] - 2026-09-02

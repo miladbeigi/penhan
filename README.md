@@ -96,7 +96,6 @@ penhan pull
 | Command | Description |
 |---------|-------------|
 | `penhan init` | Initialize penhan in the current directory |
-| `penhan remove [name]` | Remove a secret from local and backend (`--force` skips the confirmation) |
 | `penhan list` | List all secrets and their status |
 | `penhan push` | Encrypt and sync local secrets to backend (`--force` overrides conflicts) |
 | `penhan pull` | Fetch secrets from backend and decrypt locally (`--force` overrides conflicts) |

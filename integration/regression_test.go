@@ -72,8 +72,10 @@ func TestPullSurvivesRemovedSecret(t *testing.T) {
 	addSecret(t, dir, "survivor", "hello")
 	mustPush(t, dir)
 
-	if _, _, code := runPenhan(t, dir, "remove", "secrets/doomed.yaml", "--force"); code != 0 {
-		t.Fatal("remove failed")
+	// Soft-delete the secret in Vault: KV v2 keeps the metadata, so the path
+	// still shows up in listings but its data can no longer be read.
+	if out, err := vaultCmd(t, "kv", "delete", mountPath+"/doomed"); err != nil {
+		t.Fatalf("vault kv delete failed: %v: %s", err, out)
 	}
 
 	if err := os.RemoveAll(filepath.Join(dir, "secrets")); err != nil {
@@ -277,9 +279,9 @@ func TestErrorsDoNotPrintUsage(t *testing.T) {
 	dir := newProject(t)
 	initProject(t, dir)
 
-	stdout, stderr, code := runPenhan(t, dir, "remove", "secrets/ghost.yaml", "--force")
+	stdout, stderr, code := runPenhan(t, dir, "encrypt", "secrets/ghost.yaml")
 	if code == 0 {
-		t.Fatal("removing a missing secret must fail")
+		t.Fatal("encrypting a missing file must fail")
 	}
 	if strings.Contains(stdout+stderr, "Usage:") {
 		t.Errorf("runtime errors must not dump the usage block: stdout=%s stderr=%s", stdout, stderr)
