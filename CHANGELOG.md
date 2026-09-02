@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-09-02
+
+### Added
+
+- GitHub GPG provider: seal-only encryption using your GitHub public keys
+- `penhan safe add [name]` and `penhan safe list`: create and inspect named subdirectory safes, each with its own `penhan.yaml`, keys, state, and Vault base path
+- Interactive `init` backed by TUI prompts, with flags for non-interactive use
+- `remove` accepts secret file paths (plaintext or `.enc`) and shows an interactive selection list when called with no argument
+- E2E test suite running the real CLI against throwaway Vault containers (`make test-e2e`)
+
+### Changed
+
+- `add` no longer prompts for the secret value; it creates a `key: value` skeleton file to edit directly
+- `pull` plans against the actual Vault state, so remote secrets are reported as "Add" instead of "Delete"
+
+### Fixed
+
+- Module path corrected to `github.com/miladbeigi/penhan`, so documented install commands resolve
+- `remove` output shows the canonical Vault path with colored `local:`/`vault:` labels
+- GoReleaser injects version metadata into the renamed module path, so released binaries report their real version
+
 ## [0.3.0] - 2026-08-27
 
 ### Changed
