@@ -14,6 +14,7 @@ type InitAnswers struct {
 	Backend        string
 	VaultAddr      string
 	VaultToken     string
+	RemoteDir      string
 }
 
 var safeNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
@@ -67,39 +68,42 @@ func RunInitPrompts(partial *InitAnswers) (*InitAnswers, error) {
 			Title("Backend type").
 			Options(
 				huh.NewOption("Vault", "vault"),
+				huh.NewOption("File (encrypted on disk, git-committed)", "file"),
 			)
 		if err := beSelect.Value(&answers.Backend).Run(); err != nil {
 			return nil, err
 		}
 	}
 
-	if answers.VaultAddr == "" {
-		addrInput := huh.NewInput().
-			Title("Vault address").
-			Placeholder("http://127.0.0.1:8200").
-			Validate(func(s string) error {
-				if s == "" {
-					return fmt.Errorf("vault address is required")
-				}
-				return nil
-			})
-		if err := addrInput.Value(&answers.VaultAddr).Run(); err != nil {
-			return nil, err
+	if answers.Backend == "vault" {
+		if answers.VaultAddr == "" {
+			addrInput := huh.NewInput().
+				Title("Vault address").
+				Placeholder("http://127.0.0.1:8200").
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("vault address is required")
+					}
+					return nil
+				})
+			if err := addrInput.Value(&answers.VaultAddr).Run(); err != nil {
+				return nil, err
+			}
 		}
-	}
 
-	if answers.VaultToken == "" {
-		tokenInput := huh.NewInput().
-			Title("Vault token").
-			EchoMode(huh.EchoModePassword).
-			Validate(func(s string) error {
-				if s == "" {
-					return fmt.Errorf("vault token is required")
-				}
-				return nil
-			})
-		if err := tokenInput.Value(&answers.VaultToken).Run(); err != nil {
-			return nil, err
+		if answers.VaultToken == "" {
+			tokenInput := huh.NewInput().
+				Title("Vault token").
+				EchoMode(huh.EchoModePassword).
+				Validate(func(s string) error {
+					if s == "" {
+						return fmt.Errorf("vault token is required")
+					}
+					return nil
+				})
+			if err := tokenInput.Value(&answers.VaultToken).Run(); err != nil {
+				return nil, err
+			}
 		}
 	}
 

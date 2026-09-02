@@ -32,6 +32,7 @@ type AESConfig struct {
 type BackendConfig struct {
 	Type  string      `yaml:"type"`
 	Vault VaultConfig `yaml:"vault,omitempty"`
+	File  FileConfig  `yaml:"file,omitempty"`
 }
 
 type VaultConfig struct {
@@ -39,6 +40,10 @@ type VaultConfig struct {
 	TokenPath string `yaml:"token_path"`
 	MountPath string `yaml:"mount_path"`
 	BasePath  string `yaml:"base_path"`
+}
+
+type FileConfig struct {
+	Path string `yaml:"path"`
 }
 
 type SecretsConfig struct {

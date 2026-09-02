@@ -14,7 +14,7 @@ import (
 
 var pushCmd = &cobra.Command{
 	Use:   "push",
-	Short: "Encrypt and sync local secrets to Vault",
+	Short: "Encrypt and sync local secrets to the backend",
 	RunE:  runPush,
 }
 
@@ -36,7 +36,7 @@ func runPush(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	backend, err := newVaultBackend(cfg)
+	backend, err := newBackend(cfg)
 	if err != nil {
 		return err
 	}

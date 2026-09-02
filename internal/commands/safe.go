@@ -33,10 +33,11 @@ var safeListCmd = &cobra.Command{
 func init() {
 	safeAddCmd.Flags().String("encryption", "", "Encryption method (gpg/aes/github-gpg)")
 	safeAddCmd.Flags().String("github-username", "", "GitHub username (for github-gpg encryption)")
-	safeAddCmd.Flags().String("backend", "", "Backend type (vault)")
+	safeAddCmd.Flags().String("backend", "", "Backend type (vault/file)")
 	safeAddCmd.Flags().String("vault-addr", "", "Vault address")
 	safeAddCmd.Flags().String("vault-token", "", "Vault token (prefer --vault-token-file)")
 	safeAddCmd.Flags().String("vault-token-file", "", "Path to file containing Vault token")
+	safeAddCmd.Flags().String("remote-dir", "", "Remote directory (for file backend)")
 
 	safeCmd.AddCommand(safeAddCmd)
 	safeCmd.AddCommand(safeListCmd)
@@ -64,24 +65,29 @@ func runSafeAdd(cmd *cobra.Command, args []string) error {
 		partial.GitHubUsername = v
 	}
 	if v, _ := cmd.Flags().GetString("backend"); v != "" {
-		if v != "vault" {
-			return fmt.Errorf("unsupported backend: %s (only vault is supported)", v)
+		if v != "vault" && v != "file" {
+			return fmt.Errorf("unsupported backend: %s (must be vault or file)", v)
 		}
 		partial.Backend = v
 	}
 	if v, _ := cmd.Flags().GetString("vault-addr"); v != "" {
 		partial.VaultAddr = v
 	}
+	if v, _ := cmd.Flags().GetString("remote-dir"); v != "" {
+		partial.RemoteDir = v
+	}
 
-	if v, _ := cmd.Flags().GetString("vault-token-file"); v != "" {
-		data, err := os.ReadFile(v)
-		if err != nil {
-			return fmt.Errorf("reading vault token file: %w", err)
+	if partial.Backend == "vault" {
+		if v, _ := cmd.Flags().GetString("vault-token-file"); v != "" {
+			data, err := os.ReadFile(v)
+			if err != nil {
+				return fmt.Errorf("reading vault token file: %w", err)
+			}
+			partial.VaultToken = strings.TrimSpace(string(data))
+		} else if v, _ := cmd.Flags().GetString("vault-token"); v != "" {
+			fmt.Fprintln(os.Stderr, "\033[33mWarning: --vault-token is visible in shell history. Prefer --vault-token-file.\033[0m")
+			partial.VaultToken = v
 		}
-		partial.VaultToken = strings.TrimSpace(string(data))
-	} else if v, _ := cmd.Flags().GetString("vault-token"); v != "" {
-		fmt.Fprintln(os.Stderr, "\033[33mWarning: --vault-token is visible in shell history. Prefer --vault-token-file.\033[0m")
-		partial.VaultToken = v
 	}
 
 	if info, err := os.Stdin.Stat(); err == nil && (info.Mode()&os.ModeCharDevice) == 0 {
@@ -98,11 +104,13 @@ func runSafeAdd(cmd *cobra.Command, args []string) error {
 		if partial.Backend == "" {
 			missing = append(missing, "--backend")
 		}
-		if partial.VaultAddr == "" {
-			missing = append(missing, "--vault-addr")
-		}
-		if partial.VaultToken == "" {
-			missing = append(missing, "--vault-token or --vault-token-file")
+		if partial.Backend == "vault" {
+			if partial.VaultAddr == "" {
+				missing = append(missing, "--vault-addr")
+			}
+			if partial.VaultToken == "" {
+				missing = append(missing, "--vault-token or --vault-token-file")
+			}
 		}
 		if len(missing) > 0 {
 			return fmt.Errorf("non-interactive mode requires all flags; missing: %s", strings.Join(missing, ", "))
@@ -134,8 +142,10 @@ func runSafeAdd(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("github username is required for github-gpg encryption")
 	}
 
-	if err := validateVaultAddress(answers.VaultAddr); err != nil {
-		return err
+	if answers.Backend == "vault" {
+		if err := validateVaultAddress(answers.VaultAddr); err != nil {
+			return err
+		}
 	}
 
 	dir := answers.SafeName

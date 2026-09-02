@@ -1,7 +1,25 @@
 package backends
 
+// Encryptor handles encryption and decryption of data at rest.
+// Satisfied by crypto.Provider implementations.
+type Encryptor interface {
+	Encrypt(plaintext []byte) ([]byte, error)
+	Decrypt(ciphertext []byte) ([]byte, error)
+}
+
+// SetupOptions carries backend-specific configuration.
+// Not all fields are used by every provider — each provider reads what it needs.
+type SetupOptions struct {
+	Addr      string
+	Token     string
+	MountPath string
+	BasePath  string
+	Dir       string
+	Enc       Encryptor
+}
+
 // Provider defines the interface for backend storage providers.
-// Implementations can target any secret storage service (Vault, AWS Secrets Manager, etc.).
+// Implementations can target any secret storage service (Vault, file, etc.).
 type Provider interface {
 	// Push uploads secret content to the backend.
 	Push(content []byte, remotePath string) error
@@ -15,8 +33,8 @@ type Provider interface {
 	// Delete removes a secret from the backend.
 	Delete(remotePath string) error
 
-	// Setup initializes the provider with the given config.
-	Setup(addr string, token string, mountPath string, basePath string) error
+	// Setup initializes the provider with the given options.
+	Setup(opts SetupOptions) error
 
 	// IsInitialized returns true if the provider is ready to use.
 	IsInitialized() bool

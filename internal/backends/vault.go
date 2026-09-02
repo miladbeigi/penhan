@@ -22,21 +22,21 @@ func NewVaultProvider() *VaultProvider {
 	return &VaultProvider{}
 }
 
-func (p *VaultProvider) Setup(addr, token, mountPath, basePath string) error {
-	p.addr = addr
-	p.token = token
-	p.mountPath = mountPath
-	p.basePath = basePath
+func (p *VaultProvider) Setup(opts SetupOptions) error {
+	p.addr = opts.Addr
+	p.token = opts.Token
+	p.mountPath = opts.MountPath
+	p.basePath = opts.BasePath
 
 	config := vault.DefaultConfig()
-	config.Address = addr
+	config.Address = opts.Addr
 
 	client, err := vault.NewClient(config)
 	if err != nil {
 		return fmt.Errorf("create vault client: %w", err)
 	}
 
-	client.SetToken(token)
+	client.SetToken(opts.Token)
 	p.client = client
 
 	return nil

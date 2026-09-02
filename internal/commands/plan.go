@@ -45,7 +45,7 @@ func runPlan(cmd *cobra.Command, args []string) error {
 	// Fetch remote state from Vault when reachable; plan still works offline,
 	// but never silently — a hidden backend problem looks like a clean plan.
 	remoteState := state.NewState()
-	backend, err := newVaultBackend(cfg)
+	backend, err := newBackend(cfg)
 	if err == nil {
 		var rs *state.State
 		if rs, err = buildRemoteState(s, backend); err == nil {

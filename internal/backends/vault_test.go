@@ -13,7 +13,7 @@ import (
 func TestVaultProviderSetup(t *testing.T) {
 	provider := NewVaultProvider()
 
-	err := provider.Setup("https://vault.example.com", "test-token", "secret", "")
+	err := provider.Setup(SetupOptions{Addr: "https://vault.example.com", Token: "test-token", MountPath: "secret"})
 	if err != nil {
 		t.Fatalf("Setup() error = %v", err)
 	}
@@ -68,7 +68,7 @@ func TestListRecursesIntoFolders(t *testing.T) {
 	defer srv.Close()
 
 	provider := NewVaultProvider()
-	if err := provider.Setup(srv.URL, "test-token", "secret", ""); err != nil {
+	if err := provider.Setup(SetupOptions{Addr: srv.URL, Token: "test-token", MountPath: "secret"}); err != nil {
 		t.Fatalf("Setup() error = %v", err)
 	}
 
