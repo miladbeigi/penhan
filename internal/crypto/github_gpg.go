@@ -23,20 +23,15 @@ func NewGitHubGPGProvider() *GitHubGPGProvider {
 }
 
 func (p *GitHubGPGProvider) Setup(keyPath, username string) error {
-	// Try cache first
+	// Try cache first — if it parses and has keys, use it
 	if _, err := os.Stat(keyPath); err == nil {
-		f, err := os.Open(keyPath)
-		if err != nil {
-			return fmt.Errorf("open cached key: %w", err)
-		}
-		defer f.Close()
-		entities, err := openpgp.ReadArmoredKeyRing(f)
-		if err != nil {
-			return fmt.Errorf("parse cached key: %w", err)
-		}
-		if len(entities) > 0 {
-			p.entity = entities[0]
-			return nil
+		cached, err := os.ReadFile(keyPath)
+		if err == nil {
+			entities, err := openpgp.ReadArmoredKeyRing(bytes.NewReader(cached))
+			if err == nil && len(entities) > 0 {
+				p.entity = entities[0]
+				return nil
+			}
 		}
 	}
 
@@ -50,7 +45,7 @@ func (p *GitHubGPGProvider) Setup(keyPath, username string) error {
 	if err != nil {
 		return fmt.Errorf("fetch keys from github: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("github returned %d for user %q (no keys found?)", resp.StatusCode, username)
