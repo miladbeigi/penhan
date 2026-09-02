@@ -1,4 +1,4 @@
-module github.com/milad/penhan
+module github.com/miladbeigi/penhan
 
 go 1.26.5
 

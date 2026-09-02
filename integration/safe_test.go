@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/milad/penhan/internal/config"
+	"github.com/miladbeigi/penhan/internal/config"
 )
 
 func TestSafeAddCreatesProjectStructure(t *testing.T) {

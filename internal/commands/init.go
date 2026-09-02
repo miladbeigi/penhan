@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/milad/penhan/internal/config"
-	"github.com/milad/penhan/internal/crypto"
-	"github.com/milad/penhan/internal/prompt"
-	"github.com/milad/penhan/internal/state"
+	"github.com/miladbeigi/penhan/internal/config"
+	"github.com/miladbeigi/penhan/internal/crypto"
+	"github.com/miladbeigi/penhan/internal/prompt"
+	"github.com/miladbeigi/penhan/internal/state"
 	"github.com/spf13/cobra"
 )
 

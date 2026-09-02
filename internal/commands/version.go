@@ -3,7 +3,7 @@ package commands
 import (
 	"fmt"
 
-	"github.com/milad/penhan/internal/version"
+	"github.com/miladbeigi/penhan/internal/version"
 	"github.com/spf13/cobra"
 )
 

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/milad/penhan/internal/config"
-	"github.com/milad/penhan/internal/crypto"
+	"github.com/miladbeigi/penhan/internal/config"
+	"github.com/miladbeigi/penhan/internal/crypto"
 	"github.com/spf13/cobra"
 )
 

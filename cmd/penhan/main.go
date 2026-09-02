@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/milad/penhan/internal/commands"
+	"github.com/miladbeigi/penhan/internal/commands"
 )
 
 func main() {
