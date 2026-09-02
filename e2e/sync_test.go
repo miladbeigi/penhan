@@ -43,11 +43,9 @@ func TestSyncJourneyPushPull(t *testing.T) {
 	dirA := newProject(t)
 	initProjectWithTokenFile(t, dirA, vault)
 
-	stdout, stderr, code := run(t, dirA, "", "add", "db")
-	requireSuccess(t, "add", stdout, stderr, code)
 	writeFile(t, dirA, "secrets/db.yaml", content)
 
-	stdout, stderr, code = run(t, dirA, "y\n", "push")
+	stdout, stderr, code := run(t, dirA, "y\n", "push")
 	requireSuccess(t, "push", stdout, stderr, code)
 	if !strings.Contains(stdout, "Pushed: db") {
 		t.Errorf("push output missing 'Pushed: db':\n%s", stdout)
@@ -74,11 +72,9 @@ func TestPushIsIdempotent(t *testing.T) {
 	dir := newProject(t)
 	initProjectWithTokenFile(t, dir, vault)
 
-	stdout, stderr, code := run(t, dir, "", "add", "db")
-	requireSuccess(t, "add", stdout, stderr, code)
 	writeFile(t, dir, "secrets/db.yaml", "password: hunter2\n")
 
-	stdout, stderr, code = run(t, dir, "y\n", "push")
+	stdout, stderr, code := run(t, dir, "y\n", "push")
 	requireSuccess(t, "first push", stdout, stderr, code)
 	if !strings.Contains(stdout, "+ 1 to add") {
 		t.Errorf("first push should plan 1 addition:\n%s", stdout)

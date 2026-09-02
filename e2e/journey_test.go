@@ -58,7 +58,7 @@ func requireNoFile(t *testing.T, dir, rel string) {
 }
 
 // TestFullJourneyEncryptDecrypt covers the core single-user journey:
-// initialize, create a secret, encrypt it, decrypt it back, and list it.
+// initialize, write a secret file, encrypt it, decrypt it back, and list it.
 func TestFullJourneyEncryptDecrypt(t *testing.T) {
 	vault := startVault(t)
 	dir := newProject(t)
@@ -69,14 +69,10 @@ func TestFullJourneyEncryptDecrypt(t *testing.T) {
 		requireFile(t, dir, want)
 	}
 
-	stdout, stderr, code := run(t, dir, "", "add", "db")
-	requireSuccess(t, "add", stdout, stderr, code)
-	requireFile(t, dir, "secrets/db.yaml")
-
 	content := "password: hunter2\n"
 	writeFile(t, dir, "secrets/db.yaml", content)
 
-	stdout, stderr, code = run(t, dir, "", "encrypt", "secrets/db.yaml")
+	stdout, stderr, code := run(t, dir, "", "encrypt", "secrets/db.yaml")
 	requireSuccess(t, "encrypt", stdout, stderr, code)
 	requireFile(t, dir, "secrets/db.yaml.enc")
 	requireNoFile(t, dir, "secrets/db.yaml")

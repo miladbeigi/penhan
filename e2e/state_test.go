@@ -20,8 +20,6 @@ func TestPlanReflectsLocalChanges(t *testing.T) {
 		t.Errorf("plan should be empty on a fresh project:\n%s", stdout)
 	}
 
-	stdout, stderr, code = run(t, dir, "", "add", "db")
-	requireSuccess(t, "add", stdout, stderr, code)
 	writeFile(t, dir, "secrets/db.yaml", "password: hunter2\n")
 
 	stdout, stderr, code = run(t, dir, "", "plan")
@@ -50,11 +48,9 @@ func TestRemoveDeletesFromVault(t *testing.T) {
 	dir := newProject(t)
 	initProjectWithTokenFile(t, dir, vault)
 
-	stdout, stderr, code := run(t, dir, "", "add", "db")
-	requireSuccess(t, "add", stdout, stderr, code)
 	writeFile(t, dir, "secrets/db.yaml", "password: hunter2\n")
 
-	stdout, stderr, code = run(t, dir, "y\n", "push")
+	stdout, stderr, code := run(t, dir, "y\n", "push")
 	requireSuccess(t, "push", stdout, stderr, code)
 	if vaultData(t, vault, "secret/data/db") == nil {
 		t.Fatal("secret should exist in Vault after push")

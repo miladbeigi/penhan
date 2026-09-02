@@ -61,10 +61,9 @@ func TestInitAuthVariations(t *testing.T) {
 // proving the saved credentials authenticate against Vault.
 func assertPushWorks(t *testing.T, dir, secretName string) {
 	t.Helper()
-	stdout, stderr, code := run(t, dir, "", "add", secretName)
-	requireSuccess(t, "add", stdout, stderr, code)
+	writeFile(t, dir, "secrets/"+secretName+".yaml", "key: value\n")
 
-	stdout, stderr, code = run(t, dir, "y\n", "push")
+	stdout, stderr, code := run(t, dir, "y\n", "push")
 	requireSuccess(t, "push", stdout, stderr, code)
 	if !strings.Contains(stdout, "Push complete") {
 		t.Errorf("push output missing 'Push complete':\n%s", stdout)

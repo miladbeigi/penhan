@@ -47,7 +47,7 @@ cmd/penhan/          # CLI entrypoint (Cobra)
 e2e/                 # E2E tests (real CLI against real Vault, build tag: e2e)
 internal/
   backends/          # Vault provider (KV v2)
-  commands/          # CLI commands (add, remove, push, pull, plan, etc.)
+  commands/          # CLI commands (remove, push, pull, plan, etc.)
   config/            # YAML config parsing
   crypto/            # GPG/AES encryption providers
   prompt/            # TUI prompts (charmbracelet/huh)

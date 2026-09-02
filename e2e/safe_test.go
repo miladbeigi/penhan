@@ -70,10 +70,9 @@ func TestMultipleSafesIsolateBasePaths(t *testing.T) {
 
 	for _, safe := range []string{"alpha", "beta"} {
 		safeDir := filepath.Join(dir, safe)
-		stdout, stderr, code := run(t, safeDir, "", "add", "db")
-		requireSuccess(t, "add in "+safe, stdout, stderr, code)
+		writeFile(t, safeDir, "secrets/db.yaml", "key: value\n")
 
-		stdout, stderr, code = run(t, safeDir, "y\n", "push")
+		stdout, stderr, code := run(t, safeDir, "y\n", "push")
 		requireSuccess(t, "push in "+safe, stdout, stderr, code)
 
 		if data := vaultData(t, vault, "secret/data/"+safe+"/db"); data == nil {

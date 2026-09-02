@@ -74,10 +74,11 @@ penhan init \
   --vault-addr=https://vault.example.com \
   --vault-token-file=./vault-token
 
-# Add a secret (creates secrets/db/password.yaml with a placeholder)
-penhan add db/password
+# Create a secret file: a flat YAML or JSON key-value map
+mkdir -p secrets/db
+echo "password: hunter2" > secrets/db/password.yaml
 
-# Edit the secret file, then encrypt it in place for committing to Git
+# Encrypt it in place for committing to Git
 penhan encrypt
 
 # See what would change
@@ -95,7 +96,6 @@ penhan pull
 | Command | Description |
 |---------|-------------|
 | `penhan init` | Initialize penhan in the current directory |
-| `penhan add <name>` | Create a new secret |
 | `penhan remove [name]` | Remove a secret from local and backend (`--force` skips the confirmation) |
 | `penhan list` | List all secrets and their status |
 | `penhan push` | Encrypt and sync local secrets to backend (`--force` overrides conflicts) |
@@ -126,7 +126,7 @@ my-project/
     └── vault-token
 ```
 
-You edit the plaintext file (created by `add`, `pull`, or `decrypt`); `encrypt` replaces it with the `.enc` copy, and `push` syncs it to the backend.
+You create the plaintext file yourself (or get it from `pull` + `decrypt`); `encrypt` replaces it with the `.enc` copy, and `push` syncs it to the backend.
 
 ### Safes
 
