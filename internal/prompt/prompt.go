@@ -7,10 +7,11 @@ import (
 )
 
 type InitAnswers struct {
-	Encryption string
-	Backend    string
-	VaultAddr  string
-	VaultToken string
+	Encryption     string
+	GitHubUsername string
+	Backend        string
+	VaultAddr      string
+	VaultToken     string
 }
 
 func RunInitPrompts(partial *InitAnswers) (*InitAnswers, error) {
@@ -21,9 +22,25 @@ func RunInitPrompts(partial *InitAnswers) (*InitAnswers, error) {
 			Title("Encryption method").
 			Options(
 				huh.NewOption("GPG", "gpg"),
+				huh.NewOption("GitHub GPG (seal-only)", "github-gpg"),
 				huh.NewOption("AES", "aes"),
 			)
 		if err := encSelect.Value(&answers.Encryption).Run(); err != nil {
+			return nil, err
+		}
+	}
+
+	if answers.Encryption == "github-gpg" && answers.GitHubUsername == "" {
+		userInput := huh.NewInput().
+			Title("GitHub username").
+			Placeholder("your-github-username").
+			Validate(func(s string) error {
+				if s == "" {
+					return fmt.Errorf("github username is required")
+				}
+				return nil
+			})
+		if err := userInput.Value(&answers.GitHubUsername).Run(); err != nil {
 			return nil, err
 		}
 	}

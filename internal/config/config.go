@@ -19,8 +19,9 @@ type EncryptionConfig struct {
 }
 
 type GPGConfig struct {
-	KeyID   string `yaml:"key_id,omitempty"`
-	KeyPath string `yaml:"key_path,omitempty"`
+	KeyID          string `yaml:"key_id,omitempty"`
+	KeyPath        string `yaml:"key_path,omitempty"`
+	GitHubUsername string `yaml:"github_username,omitempty"`
 }
 
 type AESConfig struct {

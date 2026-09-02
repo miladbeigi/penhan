@@ -286,8 +286,6 @@ func TestErrorsDoNotPrintUsage(t *testing.T) {
 	}
 }
 
-
-
 func TestInitNonTTYMissingFlags(t *testing.T) {
 	dir := newProject(t)
 
