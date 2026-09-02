@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: ci fmt vet lint test test-integration integration-up integration-down build tidy release help
+.PHONY: ci fmt vet lint test test-integration test-e2e integration-up integration-down build tidy release help
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -49,6 +49,9 @@ integration-down: ## Stop Vault container
 test-integration: integration-up ## Run integration tests (requires Docker)
 	go test -tags=integration -v -timeout 5m ./integration/...
 	@make integration-down
+
+test-e2e: ## Run e2e tests: real CLI against throwaway Vault containers (requires Docker)
+	go test -tags=e2e -v -timeout 10m ./e2e/...
 
 build: ## Build binary
 	go build -ldflags "$(LDFLAGS)" -o penhan ./cmd/penhan
