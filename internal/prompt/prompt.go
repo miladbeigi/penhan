@@ -2,16 +2,33 @@ package prompt
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/charmbracelet/huh"
 )
 
 type InitAnswers struct {
+	SafeName       string
 	Encryption     string
 	GitHubUsername string
 	Backend        string
 	VaultAddr      string
 	VaultToken     string
+}
+
+var safeNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
+
+func ValidateSafeName(name string) error {
+	if name == "" {
+		return fmt.Errorf("safe name is required")
+	}
+	if len(name) > 64 {
+		return fmt.Errorf("safe name must be 64 characters or less")
+	}
+	if !safeNamePattern.MatchString(name) {
+		return fmt.Errorf("safe name must start with a letter or number and contain only letters, numbers, underscores, and hyphens")
+	}
+	return nil
 }
 
 func RunInitPrompts(partial *InitAnswers) (*InitAnswers, error) {
