@@ -7,6 +7,7 @@ import (
 
 func TestInitAnswersAllPopulated(t *testing.T) {
 	partial := &InitAnswers{
+		SafeName:   "default",
 		Encryption: "aes",
 		Backend:    "vault",
 		VaultAddr:  "http://127.0.0.1:8200",

@@ -175,18 +175,31 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Create config
+	return initializeSafe(".", answers)
+}
+
+// initializeSafe creates the full project structure inside dir with the
+// given configuration answers. It creates penhan.yaml, keys, directories,
+// writes the vault token, generates the encryption key, and sets up the
+// gitignore — everything that init or safe add needs.
+func initializeSafe(dir string, answers *prompt.InitAnswers) error {
+	penhanPath := filepath.Join(dir, "penhan.yaml")
+	if _, err := os.Stat(penhanPath); err == nil {
+		return fmt.Errorf("%s already exists; this directory is already initialized", penhanPath)
+	}
+
 	method := answers.Encryption
-	keyPath := filepath.Join(".penhan", "keys", method+".key")
+	relKeyPath := filepath.Join(".penhan", "keys", method+".key")
+	absKeyPath := filepath.Join(dir, relKeyPath)
 	encryption := config.EncryptionConfig{Method: method}
 	switch method {
 	case "gpg":
-		encryption.GPG.KeyPath = keyPath
+		encryption.GPG.KeyPath = relKeyPath
 	case "github-gpg":
-		encryption.GPG.KeyPath = keyPath
+		encryption.GPG.KeyPath = relKeyPath
 		encryption.GPG.GitHubUsername = answers.GitHubUsername
 	case "aes":
-		encryption.AES.KeyPath = keyPath
+		encryption.AES.KeyPath = relKeyPath
 	}
 	cfg := &config.Config{
 		Encryption: encryption,
@@ -196,6 +209,7 @@ func runInit(cmd *cobra.Command, args []string) error {
 				Addr:      answers.VaultAddr,
 				TokenPath: ".penhan/vault-token",
 				MountPath: "secret",
+				BasePath:  answers.SafeName,
 			},
 		},
 		Secrets: config.SecretsConfig{
@@ -204,18 +218,19 @@ func runInit(cmd *cobra.Command, args []string) error {
 		},
 	}
 
-	if err := config.Save(cfg, "penhan.yaml"); err != nil {
+	if err := config.Save(cfg, penhanPath); err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(".penhan/keys", 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, ".penhan", "keys"), 0o700); err != nil {
 		return fmt.Errorf("create keys directory: %w", err)
 	}
-	if err := os.MkdirAll("secrets", 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "secrets"), 0o700); err != nil {
 		return fmt.Errorf("create secrets directory: %w", err)
 	}
 
-	if err := os.WriteFile(".penhan/vault-token", []byte(answers.VaultToken), 0o600); err != nil {
+	tokenPath := filepath.Join(dir, ".penhan", "vault-token")
+	if err := os.WriteFile(tokenPath, []byte(answers.VaultToken), 0o600); err != nil {
 		return err
 	}
 
@@ -233,11 +248,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 	if method == "github-gpg" {
 		providerArgs = answers.GitHubUsername
 	}
-	if err := provider.Setup(keyPath, providerArgs); err != nil {
+	if err := provider.Setup(absKeyPath, providerArgs); err != nil {
 		return err
 	}
 
-	statePath := filepath.Join(".penhan", "state.json")
+	statePath := filepath.Join(dir, ".penhan", "state.json")
 	if _, err := os.Stat(statePath); os.IsNotExist(err) {
 		s := state.NewState()
 		if err := state.Save(s, statePath); err != nil {
@@ -245,8 +260,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	fmt.Printf("✓ Initialized penhan in current directory\n")
-	fmt.Printf("✓ Generated %s key at %s\n", strings.ToUpper(method), keyPath)
+	displayDir := dir
+	if displayDir == "." {
+		displayDir = "current directory"
+	}
+	fmt.Printf("✓ Initialized penhan in %s\n", displayDir)
+	fmt.Printf("✓ Generated %s key at %s\n", strings.ToUpper(method), absKeyPath)
 	fmt.Printf("✓ Created penhan.yaml\n")
 
 	gitignoreEntries := []string{
@@ -257,10 +276,12 @@ func runInit(cmd *cobra.Command, args []string) error {
 		".penhan/config.yaml",
 		".penhan/state.json",
 	}
-	if err := appendGitignore(gitignoreEntries); err != nil {
-		return fmt.Errorf("updating .gitignore: %w", err)
+	if filepath.Dir(dir) == "." || filepath.Dir(dir) == "" {
+		if err := appendGitignore(gitignoreEntries); err != nil {
+			return fmt.Errorf("updating .gitignore: %w", err)
+		}
+		fmt.Printf("✓ Updated .gitignore\n")
 	}
-	fmt.Printf("✓ Updated .gitignore\n")
 
 	return nil
 }
