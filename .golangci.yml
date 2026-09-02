@@ -1,5 +1,12 @@
 version: "2"
 
+run:
+  timeout: 5m
+  # Also lint files behind the `integration` build tag, otherwise
+  # integration/*_test.go is never checked.
+  build-tags:
+    - integration
+
 linters:
   enable:
     - errcheck
@@ -17,6 +24,3 @@ linters:
       enabled-tags:
         - diagnostic
         - style
-
-run:
-  timeout: 5m

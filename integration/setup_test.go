@@ -142,12 +142,12 @@ func newProject(t *testing.T) string {
 	return dir
 }
 
-func runPenhan(t *testing.T, dir string, args ...string) (string, string, int) {
+func runPenhan(t *testing.T, dir string, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 	return runPenhanWithStdin(t, dir, nil, args...)
 }
 
-func runPenhanWithStdin(t *testing.T, dir string, stdin []byte, args ...string) (string, string, int) {
+func runPenhanWithStdin(t *testing.T, dir string, stdin []byte, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -234,7 +234,7 @@ func vaultDockerExec(args ...string) (string, error) {
 func httpGet(url string) (int, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
 	if err != nil {
 		return 0, err
 	}
@@ -242,7 +242,7 @@ func httpGet(url string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	return resp.StatusCode, nil
 }
 
