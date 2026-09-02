@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
-	"github.com/milad/penhan/internal/config"
-	"github.com/milad/penhan/internal/prompt"
+	"github.com/miladbeigi/penhan/internal/config"
+	"github.com/miladbeigi/penhan/internal/prompt"
 	"github.com/spf13/cobra"
 )
 

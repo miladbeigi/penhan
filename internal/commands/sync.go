@@ -9,11 +9,11 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/milad/penhan/internal/backends"
-	"github.com/milad/penhan/internal/config"
-	"github.com/milad/penhan/internal/crypto"
-	"github.com/milad/penhan/internal/secrets"
-	"github.com/milad/penhan/internal/state"
+	"github.com/miladbeigi/penhan/internal/backends"
+	"github.com/miladbeigi/penhan/internal/config"
+	"github.com/miladbeigi/penhan/internal/crypto"
+	"github.com/miladbeigi/penhan/internal/secrets"
+	"github.com/miladbeigi/penhan/internal/state"
 )
 
 // newCryptoProvider builds and initializes the encryption provider from config.

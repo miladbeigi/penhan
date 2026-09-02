@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/milad/penhan/internal/config"
-	"github.com/milad/penhan/internal/state"
+	"github.com/miladbeigi/penhan/internal/config"
+	"github.com/miladbeigi/penhan/internal/state"
 	"github.com/spf13/cobra"
 )
 

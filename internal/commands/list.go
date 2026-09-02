@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/milad/penhan/internal/config"
-	"github.com/milad/penhan/internal/secrets"
+	"github.com/miladbeigi/penhan/internal/config"
+	"github.com/miladbeigi/penhan/internal/secrets"
 	"github.com/spf13/cobra"
 )
 

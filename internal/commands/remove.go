@@ -9,10 +9,10 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/milad/penhan/internal/config"
-	"github.com/milad/penhan/internal/prompt"
-	"github.com/milad/penhan/internal/secrets"
-	"github.com/milad/penhan/internal/state"
+	"github.com/miladbeigi/penhan/internal/config"
+	"github.com/miladbeigi/penhan/internal/prompt"
+	"github.com/miladbeigi/penhan/internal/secrets"
+	"github.com/miladbeigi/penhan/internal/state"
 	"github.com/spf13/cobra"
 )
 
