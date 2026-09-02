@@ -15,7 +15,7 @@ import (
 
 var pullCmd = &cobra.Command{
 	Use:   "pull",
-	Short: "Fetch secrets from Vault and decrypt locally",
+	Short: "Fetch secrets from the backend and decrypt locally",
 	RunE:  runPull,
 }
 
@@ -37,7 +37,7 @@ func runPull(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	backend, err := newVaultBackend(cfg)
+	backend, err := newBackend(cfg)
 	if err != nil {
 		return err
 	}

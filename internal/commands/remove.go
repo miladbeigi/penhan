@@ -18,7 +18,7 @@ import (
 
 var removeCmd = &cobra.Command{
 	Use:   "remove [path]",
-	Short: "Remove a secret from local and Vault",
+	Short: "Remove a secret from local and the backend",
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runRemove,
 }
@@ -60,7 +60,7 @@ func removeSecretFilesAndState(plaintext, encPath, secretsDir string, force bool
 	vaultPath := secrets.LocalToVault(plaintext, secretsDir)
 
 	localLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("local:")
-	vaultLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Render("vault:")
+	remoteLabel := lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Render("remote:")
 
 	if !force {
 		fmt.Printf("The following will be removed:\n")
@@ -70,7 +70,7 @@ func removeSecretFilesAndState(plaintext, encPath, secretsDir string, force bool
 		if encExists {
 			fmt.Printf("  - %s %s\n", localLabel, encPath)
 		}
-		fmt.Printf("  - %s %s\n", vaultLabel, vaultPath)
+		fmt.Printf("  - %s %s\n", remoteLabel, vaultPath)
 		fmt.Print("\nConfirm? (y/N) ")
 		reader := bufio.NewReader(os.Stdin)
 		answer, _ := reader.ReadString('\n')
@@ -95,7 +95,7 @@ func removeSecretFilesAndState(plaintext, encPath, secretsDir string, force bool
 	}
 
 	// Remove from Vault
-	backend, err := newVaultBackend(cfg)
+	backend, err := newBackend(cfg)
 	if err != nil {
 		return err
 	}

@@ -89,10 +89,11 @@ var initCmd = &cobra.Command{
 func init() {
 	initCmd.Flags().String("encryption", "", "Encryption method (gpg/aes/github-gpg)")
 	initCmd.Flags().String("github-username", "", "GitHub username (for github-gpg encryption)")
-	initCmd.Flags().String("backend", "", "Backend type (vault)")
+	initCmd.Flags().String("backend", "", "Backend type (vault/file)")
 	initCmd.Flags().String("vault-addr", "", "Vault address")
 	initCmd.Flags().String("vault-token", "", "Vault token (prefer --vault-token-file)")
 	initCmd.Flags().String("vault-token-file", "", "Path to file containing Vault token")
+	initCmd.Flags().String("remote-dir", "", "Remote directory (for file backend)")
 	rootCmd.AddCommand(initCmd)
 }
 
@@ -114,13 +115,16 @@ func runInit(cmd *cobra.Command, args []string) error {
 		partial.GitHubUsername = v
 	}
 	if v, _ := cmd.Flags().GetString("backend"); v != "" {
-		if v != "vault" {
-			return fmt.Errorf("unsupported backend: %s (only vault is supported)", v)
+		if v != "vault" && v != "file" {
+			return fmt.Errorf("unsupported backend: %s (must be vault or file)", v)
 		}
 		partial.Backend = v
 	}
 	if v, _ := cmd.Flags().GetString("vault-addr"); v != "" {
 		partial.VaultAddr = v
+	}
+	if v, _ := cmd.Flags().GetString("remote-dir"); v != "" {
+		partial.RemoteDir = v
 	}
 
 	// Token resolution: file > token > prompt
@@ -148,11 +152,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if partial.Backend == "" {
 			missing = append(missing, "--backend")
 		}
-		if partial.VaultAddr == "" {
-			missing = append(missing, "--vault-addr")
-		}
-		if partial.VaultToken == "" {
-			missing = append(missing, "--vault-token or --vault-token-file")
+		if partial.Backend == "vault" {
+			if partial.VaultAddr == "" {
+				missing = append(missing, "--vault-addr")
+			}
+			if partial.VaultToken == "" {
+				missing = append(missing, "--vault-token or --vault-token-file")
+			}
 		}
 		if len(missing) > 0 {
 			return fmt.Errorf("non-interactive mode requires all flags; missing: %s", strings.Join(missing, ", "))
@@ -170,9 +176,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("github username is required for github-gpg encryption")
 	}
 
-	// Validate vault address
-	if err := validateVaultAddress(answers.VaultAddr); err != nil {
-		return err
+	if answers.Backend == "vault" {
+		if err := validateVaultAddress(answers.VaultAddr); err != nil {
+			return err
+		}
 	}
 
 	return initializeSafe(".", answers)
@@ -203,15 +210,7 @@ func initializeSafe(dir string, answers *prompt.InitAnswers) error {
 	}
 	cfg := &config.Config{
 		Encryption: encryption,
-		Backend: config.BackendConfig{
-			Type: "vault",
-			Vault: config.VaultConfig{
-				Addr:      answers.VaultAddr,
-				TokenPath: ".penhan/vault-token",
-				MountPath: "secret",
-				BasePath:  answers.SafeName,
-			},
-		},
+		Backend:    buildBackendConfig(answers),
 		Secrets: config.SecretsConfig{
 			Path:   "secrets/",
 			Format: "yaml",
@@ -229,9 +228,21 @@ func initializeSafe(dir string, answers *prompt.InitAnswers) error {
 		return fmt.Errorf("create secrets directory: %w", err)
 	}
 
-	tokenPath := filepath.Join(dir, ".penhan", "vault-token")
-	if err := os.WriteFile(tokenPath, []byte(answers.VaultToken), 0o600); err != nil {
-		return err
+	if answers.Backend == "vault" {
+		tokenPath := filepath.Join(dir, ".penhan", "vault-token")
+		if err := os.WriteFile(tokenPath, []byte(answers.VaultToken), 0o600); err != nil {
+			return err
+		}
+	}
+
+	if answers.Backend == "file" {
+		remoteDir := answers.RemoteDir
+		if remoteDir == "" {
+			remoteDir = ".penhan/remote"
+		}
+		if err := os.MkdirAll(filepath.Join(dir, remoteDir), 0o700); err != nil {
+			return fmt.Errorf("create remote directory: %w", err)
+		}
 	}
 
 	var provider crypto.Provider
@@ -272,9 +283,11 @@ func initializeSafe(dir string, answers *prompt.InitAnswers) error {
 		"secrets/*.yaml",
 		"secrets/*.yml",
 		".penhan/keys/",
-		".penhan/vault-token",
 		".penhan/config.yaml",
 		".penhan/state.json",
+	}
+	if answers.Backend == "vault" {
+		gitignoreEntries = append(gitignoreEntries, ".penhan/vault-token")
 	}
 	if filepath.Dir(dir) == "." || filepath.Dir(dir) == "" {
 		if err := appendGitignore(gitignoreEntries); err != nil {
@@ -284,4 +297,29 @@ func initializeSafe(dir string, answers *prompt.InitAnswers) error {
 	}
 
 	return nil
+}
+
+// buildBackendConfig returns the BackendConfig for the given backend type.
+func buildBackendConfig(answers *prompt.InitAnswers) config.BackendConfig {
+	switch answers.Backend {
+	case "file":
+		remoteDir := answers.RemoteDir
+		if remoteDir == "" {
+			remoteDir = ".penhan/remote"
+		}
+		return config.BackendConfig{
+			Type: "file",
+			File: config.FileConfig{Path: remoteDir},
+		}
+	default:
+		return config.BackendConfig{
+			Type: "vault",
+			Vault: config.VaultConfig{
+				Addr:      answers.VaultAddr,
+				TokenPath: ".penhan/vault-token",
+				MountPath: "secret",
+				BasePath:  answers.SafeName,
+			},
+		}
+	}
 }

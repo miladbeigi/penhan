@@ -42,6 +42,18 @@ func newCryptoProvider(cfg *config.Config) (crypto.Provider, error) {
 	}
 }
 
+// newBackend builds and initializes the configured backend provider.
+func newBackend(cfg *config.Config) (backends.Provider, error) {
+	switch cfg.Backend.Type {
+	case "", "vault":
+		return newVaultBackend(cfg)
+	case "file":
+		return newFileBackend(cfg)
+	default:
+		return nil, fmt.Errorf("unsupported backend type: %s", cfg.Backend.Type)
+	}
+}
+
 // newVaultBackend builds and initializes the Vault backend from config.
 func newVaultBackend(cfg *config.Config) (*backends.VaultProvider, error) {
 	backend := backends.NewVaultProvider()
@@ -49,9 +61,41 @@ func newVaultBackend(cfg *config.Config) (*backends.VaultProvider, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := backend.Setup(cfg.Backend.Vault.Addr, strings.TrimSpace(string(token)), cfg.Backend.Vault.MountPath, cfg.Backend.Vault.BasePath); err != nil {
+	if err := backend.Setup(backends.SetupOptions{
+		Addr:      cfg.Backend.Vault.Addr,
+		Token:     strings.TrimSpace(string(token)),
+		MountPath: cfg.Backend.Vault.MountPath,
+		BasePath:  cfg.Backend.Vault.BasePath,
+	}); err != nil {
 		return nil, err
 	}
+	return backend, nil
+}
+
+// newFileBackend builds and initializes the file backend from config.
+func newFileBackend(cfg *config.Config) (*backends.FileProvider, error) {
+	provider, err := newCryptoProvider(cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	dir := cfg.Backend.File.Path
+	if dir == "" {
+		dir = ".penhan/remote"
+	}
+
+	backend := backends.NewFileProvider()
+	if err := backend.Setup(backends.SetupOptions{
+		Dir: dir,
+		Enc: provider,
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("create remote directory: %w", err)
+	}
+
 	return backend, nil
 }
 
@@ -82,7 +126,6 @@ func collectLocalSecrets(cfg *config.Config, provider crypto.Provider) (map[stri
 
 		vaultPath := secrets.LocalToVault(name, cfg.Secrets.Path)
 		if _, seen := local[vaultPath]; seen && isEnc {
-			// Plaintext sibling was already collected (walk order is lexical).
 			return nil
 		}
 
@@ -130,10 +173,7 @@ func buildLocalState(prev *state.State, local map[string][]byte) *state.State {
 	return localState
 }
 
-// buildRemoteState derives a plan-ready state from the backend, marking entries
-// changed when their content differs from the last sync. Secrets that cannot be
-// read (e.g. deleted versions) are skipped.
-func buildRemoteState(prev *state.State, backend *backends.VaultProvider) (*state.State, error) {
+func buildRemoteState(prev *state.State, backend backends.Provider) (*state.State, error) {
 	remoteState := state.NewState()
 	paths, err := backend.List("")
 	if err != nil {
@@ -154,9 +194,7 @@ func buildRemoteState(prev *state.State, backend *backends.VaultProvider) (*stat
 	return remoteState, nil
 }
 
-// fetchRemoteState reads all secrets from the backend without change detection.
-// Used by pull where we want to accept remote as-is.
-func fetchRemoteState(backend *backends.VaultProvider) (*state.State, error) {
+func fetchRemoteState(backend backends.Provider) (*state.State, error) {
 	remoteState := state.NewState()
 	paths, err := backend.List("")
 	if err != nil {
