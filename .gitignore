@@ -9,3 +9,5 @@ penhan
 
 # Testing Folder
 .test/
+secrets/*.yaml
+secrets/*.yml

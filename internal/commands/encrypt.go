@@ -34,6 +34,11 @@ func runEncrypt(cmd *cobra.Command, args []string) error {
 		if err := provider.Setup(cfg.Encryption.GPG.KeyPath, ""); err != nil {
 			return err
 		}
+	case "github-gpg":
+		provider = crypto.NewGitHubGPGProvider()
+		if err := provider.Setup(cfg.Encryption.GPG.KeyPath, cfg.Encryption.GPG.GitHubUsername); err != nil {
+			return err
+		}
 	case "aes":
 		provider = crypto.NewAESProvider()
 		if err := provider.Setup(cfg.Encryption.AES.KeyPath, ""); err != nil {

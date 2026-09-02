@@ -25,6 +25,12 @@ func newCryptoProvider(cfg *config.Config) (crypto.Provider, error) {
 			return nil, err
 		}
 		return provider, nil
+	case "github-gpg":
+		provider := crypto.NewGitHubGPGProvider()
+		if err := provider.Setup(cfg.Encryption.GPG.KeyPath, cfg.Encryption.GPG.GitHubUsername); err != nil {
+			return nil, err
+		}
+		return provider, nil
 	case "aes":
 		provider := crypto.NewAESProvider()
 		if err := provider.Setup(cfg.Encryption.AES.KeyPath, ""); err != nil {

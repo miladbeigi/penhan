@@ -87,7 +87,8 @@ var initCmd = &cobra.Command{
 }
 
 func init() {
-	initCmd.Flags().String("encryption", "", "Encryption method (gpg/aes)")
+	initCmd.Flags().String("encryption", "", "Encryption method (gpg/aes/github-gpg)")
+	initCmd.Flags().String("github-username", "", "GitHub username (for github-gpg encryption)")
 	initCmd.Flags().String("backend", "", "Backend type (vault)")
 	initCmd.Flags().String("vault-addr", "", "Vault address")
 	initCmd.Flags().String("vault-token", "", "Vault token (prefer --vault-token-file)")
@@ -104,10 +105,13 @@ func runInit(cmd *cobra.Command, args []string) error {
 	partial := &prompt.InitAnswers{}
 
 	if v, _ := cmd.Flags().GetString("encryption"); v != "" {
-		if v != "gpg" && v != "aes" {
-			return fmt.Errorf("invalid encryption method: %s (must be gpg or aes)", v)
+		if v != "gpg" && v != "aes" && v != "github-gpg" {
+			return fmt.Errorf("invalid encryption method: %s (must be gpg, aes, or github-gpg)", v)
 		}
 		partial.Encryption = v
+	}
+	if v, _ := cmd.Flags().GetString("github-username"); v != "" {
+		partial.GitHubUsername = v
 	}
 	if v, _ := cmd.Flags().GetString("backend"); v != "" {
 		if v != "vault" {
@@ -137,6 +141,10 @@ func runInit(cmd *cobra.Command, args []string) error {
 		if partial.Encryption == "" {
 			missing = append(missing, "--encryption")
 		}
+		// Also include github-gpg in non-interactive missing check
+		if partial.Encryption == "github-gpg" && partial.GitHubUsername == "" {
+			missing = append(missing, "--github-username")
+		}
 		if partial.Backend == "" {
 			missing = append(missing, "--backend")
 		}
@@ -157,6 +165,11 @@ func runInit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Validate github-gpg requires a username
+	if answers.Encryption == "github-gpg" && answers.GitHubUsername == "" {
+		return fmt.Errorf("github username is required for github-gpg encryption")
+	}
+
 	// Validate vault address
 	if err := validateVaultAddress(answers.VaultAddr); err != nil {
 		return err
@@ -169,6 +182,9 @@ func runInit(cmd *cobra.Command, args []string) error {
 	switch method {
 	case "gpg":
 		encryption.GPG.KeyPath = keyPath
+	case "github-gpg":
+		encryption.GPG.KeyPath = keyPath
+		encryption.GPG.GitHubUsername = answers.GitHubUsername
 	case "aes":
 		encryption.AES.KeyPath = keyPath
 	}
@@ -207,11 +223,17 @@ func runInit(cmd *cobra.Command, args []string) error {
 	switch method {
 	case "gpg":
 		provider = crypto.NewGPGProvider()
+	case "github-gpg":
+		provider = crypto.NewGitHubGPGProvider()
 	case "aes":
 		provider = crypto.NewAESProvider()
 	}
 
-	if err := provider.Setup(keyPath, ""); err != nil {
+	providerArgs := ""
+	if method == "github-gpg" {
+		providerArgs = answers.GitHubUsername
+	}
+	if err := provider.Setup(keyPath, providerArgs); err != nil {
 		return err
 	}
 
