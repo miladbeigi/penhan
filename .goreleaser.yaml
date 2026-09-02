@@ -18,9 +18,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/milad/penhan/internal/version.Version={{.Version}}
-      - -X github.com/milad/penhan/internal/version.Commit={{.ShortCommit}}
-      - -X github.com/milad/penhan/internal/version.Date={{.Date}}
+      - -X github.com/miladbeigi/penhan/internal/version.Version={{.Version}}
+      - -X github.com/miladbeigi/penhan/internal/version.Commit={{.ShortCommit}}
+      - -X github.com/miladbeigi/penhan/internal/version.Date={{.Date}}
 
 archives:
   - id: default
