@@ -28,10 +28,23 @@ cd integration && docker compose up -d
 go test -tags=integration ./integration/...
 ```
 
+## E2E Tests
+
+E2E tests run the real penhan binary against a real Vault server. Each
+scenario starts its own throwaway Vault container (via testcontainers-go,
+random port) and destroys it afterwards — no Makefile orchestration, no
+leftover state:
+
+```bash
+make test-e2e             # Requires Docker
+go test -tags=e2e -run TestSyncJourneyPushPull ./e2e/...  # Single scenario
+```
+
 ## Project Structure
 
 ```
 cmd/penhan/          # CLI entrypoint (Cobra)
+e2e/                 # E2E tests (real CLI against real Vault, build tag: e2e)
 internal/
   backends/          # Vault provider (KV v2)
   commands/          # CLI commands (add, remove, push, pull, plan, etc.)
