@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `penhan add` wrote safe-relative patterns (`.penhan/vault-token`, `.penhan/keys/`, `secrets/*.yaml`) to the project-root `.gitignore`. Patterns containing a slash are anchored to that directory, so git never matched the files inside the safe and keys, tokens, and plaintext secrets were left untracked but not ignored. Entries are now prefixed with the safe directory.
+
 ## [0.5.0] - 2026-09-03
 
 The CLI is reduced to six commands: `add`, `check`, `push`, `encrypt`, `decrypt`, `version`.

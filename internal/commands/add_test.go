@@ -239,3 +239,36 @@ func TestAppendGitignore_CorruptFile(t *testing.T) {
 		t.Error("expected .gitignore to be created")
 	}
 }
+
+// Patterns containing a slash are anchored to the directory holding the
+// .gitignore. Since add writes the project-root .gitignore, every entry
+// must be prefixed with the safe directory or git never matches it.
+func TestGitignoreEntries_PrefixedWithSafeDir(t *testing.T) {
+	got := gitignoreEntries("vault", "vault")
+	want := []string{
+		"vault/secrets/*.yaml",
+		"vault/secrets/*.yml",
+		"vault/secrets/*.json",
+		"vault/.penhan/keys/",
+		"vault/.penhan/vault-token",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("entry %d = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestGitignoreEntries_FileBackendHasNoToken(t *testing.T) {
+	for _, e := range gitignoreEntries("myapp", "file") {
+		if strings.Contains(e, "vault-token") {
+			t.Errorf("file backend must not ignore a vault token, got %q", e)
+		}
+		if !strings.HasPrefix(e, "myapp/") {
+			t.Errorf("entry %q is not prefixed with the safe dir", e)
+		}
+	}
+}

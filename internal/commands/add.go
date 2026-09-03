@@ -228,21 +228,29 @@ func createSafe(answers *prompt.InitAnswers) error {
 	fmt.Printf("✓ Generated %s key at %s\n", strings.ToUpper(method), absKeyPath)
 	fmt.Printf("✓ Created %s\n", penhanPath)
 
-	gitignoreEntries := []string{
-		"secrets/*.yaml",
-		"secrets/*.yml",
-		"secrets/*.json",
-		".penhan/keys/",
-	}
-	if answers.Backend == "vault" {
-		gitignoreEntries = append(gitignoreEntries, ".penhan/vault-token")
-	}
-	if err := appendGitignore(gitignoreEntries); err != nil {
+	if err := appendGitignore(gitignoreEntries(dir, answers.Backend)); err != nil {
 		return fmt.Errorf("updating .gitignore: %w", err)
 	}
 	fmt.Printf("✓ Updated .gitignore\n")
 
 	return nil
+}
+
+// gitignoreEntries lists the patterns that keep a safe's plaintext secrets,
+// keys, and credentials out of git. The .gitignore lives in the project root,
+// and any pattern containing a slash is anchored to that directory, so each
+// entry is prefixed with the safe directory or git would never match it.
+func gitignoreEntries(dir, backend string) []string {
+	entries := []string{
+		dir + "/secrets/*.yaml",
+		dir + "/secrets/*.yml",
+		dir + "/secrets/*.json",
+		dir + "/.penhan/keys/",
+	}
+	if backend == "vault" {
+		entries = append(entries, dir+"/.penhan/vault-token")
+	}
+	return entries
 }
 
 // buildBackendConfig returns the BackendConfig for the given backend type.
