@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Fixed
 
 - `penhan add` wrote safe-relative patterns (`.penhan/vault-token`, `.penhan/keys/`, `secrets/*.yaml`) to the project-root `.gitignore`. Patterns containing a slash are anchored to that directory, so git never matched the files inside the safe and keys, tokens, and plaintext secrets were left untracked but not ignored. Entries are now prefixed with the safe directory.
+- `penhan check` and `penhan push` no longer fail on GitHub GPG seal-only safes when an encrypted-only secret is present; those entries are now skipped with a warning unless a plaintext copy exists.
 
 ## [0.5.0] - 2026-09-03
 

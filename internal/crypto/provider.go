@@ -13,4 +13,7 @@ type Provider interface {
 
 	// IsInitialized returns true if the provider is ready to use.
 	IsInitialized() bool
+
+	// SealOnly reports whether this provider supports only encryption.
+	SealOnly() bool
 }

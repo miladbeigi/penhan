@@ -59,6 +59,10 @@ func (p *AESProvider) IsInitialized() bool {
 	return len(p.key) > 0
 }
 
+func (p *AESProvider) SealOnly() bool {
+	return false
+}
+
 func (p *AESProvider) Encrypt(plaintext []byte) ([]byte, error) {
 	block, err := aes.NewCipher(p.key)
 	if err != nil {

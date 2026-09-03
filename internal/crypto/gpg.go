@@ -69,6 +69,10 @@ func (p *GPGProvider) IsInitialized() bool {
 	return p.entity != nil
 }
 
+func (p *GPGProvider) SealOnly() bool {
+	return false
+}
+
 func (p *GPGProvider) Encrypt(plaintext []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w, err := armor.Encode(&buf, "PGP MESSAGE", nil)

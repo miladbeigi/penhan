@@ -133,6 +133,10 @@ func collectLocalSecrets(cfg *config.Config, provider crypto.Provider) ([]localS
 			return err
 		}
 		if isEnc {
+			if provider.SealOnly() {
+				fmt.Fprintf(os.Stderr, "  Skipping %s (encrypted, no plaintext available for seal-only provider)\n", remotePath)
+				return nil
+			}
 			if data, err = provider.Decrypt(data); err != nil {
 				return fmt.Errorf("decrypt %s: %w", path, err)
 			}

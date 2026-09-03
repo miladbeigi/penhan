@@ -27,6 +27,9 @@ func TestGitHubGPGNotInitialized(t *testing.T) {
 	if p.IsInitialized() {
 		t.Fatal("should not be initialized")
 	}
+	if !p.SealOnly() {
+		t.Fatal("github-gpg provider should be seal-only")
+	}
 }
 
 func TestGitHubGPGSetupMissingKey(t *testing.T) {
