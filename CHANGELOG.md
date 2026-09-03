@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-03
+
 The CLI is reduced to six commands: `add`, `check`, `push`, `encrypt`, `decrypt`, `version`.
 
 ### Added
