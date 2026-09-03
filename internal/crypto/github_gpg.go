@@ -81,6 +81,10 @@ func (p *GitHubGPGProvider) IsInitialized() bool {
 	return p.entity != nil
 }
 
+func (p *GitHubGPGProvider) SealOnly() bool {
+	return true
+}
+
 func (p *GitHubGPGProvider) Encrypt(plaintext []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w, err := armor.Encode(&buf, "PGP MESSAGE", nil)
