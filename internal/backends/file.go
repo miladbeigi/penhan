@@ -59,7 +59,7 @@ func (p *FileProvider) Pull(remotePath string) ([]byte, error) {
 	encrypted, err := os.ReadFile(fullPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("secret not found: %s", remotePath)
+			return nil, fmt.Errorf("%w: %s", ErrNotFound, remotePath)
 		}
 		return nil, fmt.Errorf("read secret file: %w", err)
 	}

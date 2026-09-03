@@ -27,22 +27,9 @@ func runDecrypt(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	var provider crypto.Provider
-	switch cfg.Encryption.Method {
-	case "gpg":
-		provider = crypto.NewGPGProvider()
-		if err := provider.Setup(cfg.Encryption.GPG.KeyPath, ""); err != nil {
-			return err
-		}
-	case "github-gpg":
-		return fmt.Errorf("decrypt is not supported with github-gpg method (seal-only provider)")
-	case "aes":
-		provider = crypto.NewAESProvider()
-		if err := provider.Setup(cfg.Encryption.AES.KeyPath, ""); err != nil {
-			return err
-		}
-	default:
-		return fmt.Errorf("unsupported encryption method: %s", cfg.Encryption.Method)
+	provider, err := newCryptoProvider(cfg)
+	if err != nil {
+		return err
 	}
 
 	if len(args) == 0 {

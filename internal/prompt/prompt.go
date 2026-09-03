@@ -109,19 +109,3 @@ func RunInitPrompts(partial *InitAnswers) (*InitAnswers, error) {
 
 	return &answers, nil
 }
-
-func RunRemoveSelect(entries []string) (string, error) {
-	options := make([]huh.Option[string], len(entries))
-	for i, e := range entries {
-		options[i] = huh.NewOption(e, e)
-	}
-
-	var selected string
-	sel := huh.NewSelect[string]().
-		Title("Select a secret to remove").
-		Options(options...)
-	if err := sel.Value(&selected).Run(); err != nil {
-		return "", err
-	}
-	return selected, nil
-}

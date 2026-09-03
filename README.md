@@ -4,25 +4,25 @@
 [![Release](https://img.shields.io/github/v/release/miladbeigi/penhan)](https://github.com/miladbeigi/penhan/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-**Git-native secret management with encryption and multi-backend sync.**
+**Git-native secret management with encryption and backend sync.**
 
-Penhan manages secrets securely using Git as the source of truth. Secrets are stored encrypted in Git repositories and synced to your secret backend — HashiCorp Vault today, with more backends planned.
+Penhan keeps secrets as encrypted files in Git and pushes them to a secret backend: HashiCorp Vault, or an encrypted directory on disk. Git is the source of truth; the backend is where applications read from.
 
 ## Features
 
-- **Git-native** — secrets live in Git, versioned and auditable
+- **Git-native** — secrets live in Git as encrypted files, versioned and auditable
 - **Encrypted at rest** — GPG/PGP, AES-256-GCM, or GitHub GPG keys
-- **Multi-backend sync** — push secrets to Vault (more backends planned)
-- **Named safes** — multiple isolated secret directories sharing one backend
-- **Conflict safety** — Terraform-style plan/apply prevents accidental overwrites
-- **Directory mapping** — local folder structure maps to backend paths automatically
-- **State tracking** — hash-based conflict detection across local and remote state
+- **Safes** — each safe is a directory with its own config, key, and backend base path
+- **Hash-based sync** — `check` compares local files with the backend; `push` writes only what changed
+- **Directory mapping** — the folder structure under `secrets/` maps to backend paths automatically
+- **Six commands** — nothing to learn beyond add, check, push, encrypt, decrypt, version
 
 ## Backends
 
 | Backend | Status |
 |---------|--------|
 | HashiCorp Vault KV v2 | Supported |
+| Encrypted file directory | Supported |
 | AWS Secrets Manager | Planned |
 | GCP Secret Manager | Planned |
 | Azure Key Vault | Planned |
@@ -64,80 +64,66 @@ make build
 ## Quick Start
 
 ```bash
-# Initialize penhan in your project (interactive)
-penhan init
-
-# Or non-interactively with flags
-penhan init \
+# Create a safe (interactive), or pass everything as flags
+penhan add myapp
+penhan add myapp \
   --encryption=aes \
   --backend=vault \
   --vault-addr=https://vault.example.com \
   --vault-token-file=./vault-token
 
-# Add a secret (creates secrets/db/password.yaml with a placeholder)
-penhan add db/password
+cd myapp
 
-# Edit the secret file, then encrypt it in place for committing to Git
+# Create a secret file: a flat YAML or JSON key-value map
+mkdir -p secrets/db
+echo "password: hunter2" > secrets/db/password.yaml
+
+# Encrypt it in place for committing to Git
 penhan encrypt
 
-# See what would change
-penhan plan
+# See what differs from the backend
+penhan check
 
-# Push secrets to backend
+# Push new and changed secrets to the backend
 penhan push
-
-# Pull secrets from backend
-penhan pull
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `penhan init` | Initialize penhan in the current directory |
-| `penhan add <name>` | Create a new secret |
-| `penhan remove [name]` | Remove a secret from local and backend (`--force` skips the confirmation) |
-| `penhan list` | List all secrets and their status |
-| `penhan push` | Encrypt and sync local secrets to backend (`--force` overrides conflicts) |
-| `penhan pull` | Fetch secrets from backend and decrypt locally (`--force` overrides conflicts) |
-| `penhan plan` | Show what push/pull would do (dry-run) |
+| `penhan add [name]` | Create a safe: a subdirectory with its own config, key, and backend settings |
+| `penhan check` | Compare local secrets with the backend and report `new`, `changed`, or `unchanged`. Never writes |
+| `penhan push` | Push secrets whose hash differs from the backend; skip the rest. Prints every secret |
 | `penhan encrypt [file\|dir]` | Encrypt secret files in place (defaults to the secrets directory) |
 | `penhan decrypt [file\|dir]` | Decrypt secret files in place (defaults to the secrets directory) |
-| `penhan safe add [name]` | Create and initialize a new named safe |
-| `penhan safe list` | List safes in the current directory |
 | `penhan version` | Print version information |
+
+All commands except `add` and `version` run inside a safe directory.
 
 ## How It Works
 
-### Directory Structure
+### Safes
+
+A project is a directory of safes. `penhan add <name>` creates one:
 
 ```
 my-project/
-├── penhan.yaml                # Penhan configuration (committed)
-├── secrets/                   # Secret files (the *.enc copies are committed)
-│   ├── db/
-│   │   └── password.yaml.enc  # Encrypted file in Git
-│   └── api/
-│       └── key.yaml.enc
-└── .penhan/                   # Penhan state (gitignored)
-    ├── state.json
-    ├── keys/
-    │   └── aes.key            # Key file named after the encryption method
-    └── vault-token
+├── .gitignore                 # add appends key, token, and plaintext patterns
+└── myapp/                     # the safe
+    ├── penhan.yaml            # safe configuration (committed)
+    ├── secrets/               # secret files; the *.enc copies are committed
+    │   ├── db/
+    │   │   └── password.yaml.enc
+    │   └── api/
+    │       └── key.yaml.enc
+    └── .penhan/               # keys and credentials (gitignored)
+        ├── keys/
+        │   └── aes.key        # key file named after the encryption method
+        └── vault-token
 ```
 
-You edit the plaintext file (created by `add`, `pull`, or `decrypt`); `encrypt` replaces it with the `.enc` copy, and `push` syncs it to the backend.
-
-### Safes
-
-`penhan safe add <name>` creates a named safe — a subdirectory with its own `penhan.yaml`, `secrets/`, and `.penhan/` state:
-
-```bash
-penhan safe add myapp    # creates ./myapp with its own config and keys
-penhan safe list         # lists safes found in the current directory
-```
-
-Each safe sets `backend.vault.base_path` to its name, so multiple safes can share one Vault backend without path collisions.
+Each safe sets its backend base path to its own name, so several safes can share one Vault without path collisions.
 
 ### Path Mapping
 
@@ -145,10 +131,10 @@ Local paths map to backend paths automatically:
 
 | Local Path | Vault Path |
 |------------|------------|
-| `secrets/db/password.yaml` | `secret/data/db/password` |
-| `secrets/api/key.yaml` | `secret/data/api/key` |
+| `secrets/db/password.yaml` | `secret/data/myapp/db/password` |
+| `secrets/api/key.yaml` | `secret/data/myapp/api/key` |
 
-The Vault path is `{mount_path}/data/{base_path}/{secret path}`. `base_path` is empty for `penhan init` and set to the safe name for `penhan safe add`.
+The Vault path is `{mount_path}/data/{base_path}/{secret path}`, where `base_path` is the safe name.
 
 ### Encryption
 
@@ -158,21 +144,21 @@ Penhan supports three encryption methods:
 - **`github-gpg`** — fetches your public key from `https://github.com/<username>.gpg` and encrypts with it; seal-only, so decrypting requires your private key on the local machine
 - **`aes`** — symmetric AES-256-GCM encryption with a generated key stored under `.penhan/keys/`
 
-Secret files are flat YAML or JSON key-value pairs (`.yaml`, `.yml`, or `.json`); nested maps or lists are rejected.
+Secret files are flat YAML or JSON key-value pairs (`.yaml`, `.yml`, or `.json`); nested maps or lists are rejected. `check` and `push` read both plaintext and `.enc` files; when both exist for the same secret, the plaintext wins.
 
-### State Management
+### Check and Push
 
-Penhan tracks secret state using hashes:
+There is no local state file. `check` hashes each local secret's content and reads the same path from the backend:
 
-- **new** — secret exists locally but hasn't been pushed
-- **synced** — local and remote are in sync
-- **local_changed** — local version differs from last sync
-- **remote_changed** — remote version differs from last sync
-- **conflict** — both sides changed since last sync (requires `--force` to override)
+- **new** — the backend has nothing at this path
+- **changed** — the backend content hashes differently
+- **unchanged** — identical, nothing to do
+
+`push` runs the same comparison and writes the `new` and `changed` secrets. The local file is the source of truth: an edit made directly in the backend shows up as `changed` and is overwritten on the next push. Run `check` first if you want to see that before it happens. Only secrets that exist locally are considered; secrets that live solely in the backend are neither reported nor deleted.
 
 ## Configuration
 
-`penhan.yaml` in your project root (generated by `penhan init`):
+`penhan.yaml` inside a safe (generated by `penhan add`):
 
 ```yaml
 encryption:
@@ -184,12 +170,14 @@ encryption:
   #   github_username: yourname  # required for github-gpg
 
 backend:
-  type: vault
+  type: vault          # vault or file
   vault:
     addr: https://vault.example.com
     token_path: .penhan/vault-token
     mount_path: secret
-    base_path: ""      # set to the safe name when initialized via `safe add`
+    base_path: myapp   # the safe name
+  # file:
+  #   path: .penhan/remote   # encrypted copies written here instead of Vault
 
 secrets:
   path: secrets/

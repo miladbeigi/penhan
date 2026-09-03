@@ -83,12 +83,13 @@ func (p *VaultProvider) Pull(remotePath string) ([]byte, error) {
 	}
 
 	if secret == nil || secret.Data == nil {
-		return nil, fmt.Errorf("secret not found: %s", remotePath)
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, remotePath)
 	}
 
+	// A soft-deleted KV v2 version still answers the read, but with nil data.
 	data, ok := secret.Data["data"].(map[string]interface{})
-	if !ok {
-		return nil, fmt.Errorf("invalid secret format")
+	if !ok || data == nil {
+		return nil, fmt.Errorf("%w: %s", ErrNotFound, remotePath)
 	}
 
 	content, err := json.Marshal(data)

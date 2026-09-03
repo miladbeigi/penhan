@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+The CLI is reduced to six commands: `add`, `check`, `push`, `encrypt`, `decrypt`, `version`.
+
+### Added
+
+- `penhan check`: hashes every local secret file and compares it with the backend, reporting each as `new`, `changed`, or `unchanged`. Reads only, never writes. Secrets that exist only in the backend are not reported.
+
+### Changed
+
+- `penhan add [name]` now creates a named safe (what `penhan safe add` used to do). A project is a directory of safes; there is no top-level `init`.
+- `penhan push` runs the same comparison as `check`, pushes only new or changed secrets, and prints every secret it pushed or skipped. There is no plan, no confirmation prompt, and no `--force` flag.
+- Conflict detection is gone along with the state file: the local file is the source of truth, and `push` overwrites edits made directly in the backend. Use `check` first to see them.
+- The `.penhan/state.json` file is no longer created or read.
+
+### Removed
+
+- `penhan init`, `penhan safe add`, `penhan safe list`: replaced by `penhan add`
+- `penhan plan`: replaced by `penhan check`
+- `penhan pull`, `penhan list`: the encrypted `.enc` files in git are the copy you work from
+- `penhan remove`: delete the secret file instead; removal from the backend is left to the backend's own tooling
+- The old `penhan add <secret>` scaffolding command: secrets are plain files, so create them directly under the secrets directory
+
 ## [0.4.0] - 2026-09-02
 
 ### Added

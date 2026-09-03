@@ -1,9 +1,6 @@
 package prompt
 
-import (
-	"os"
-	"testing"
-)
+import "testing"
 
 func TestInitAnswersAllPopulated(t *testing.T) {
 	partial := &InitAnswers{
@@ -28,11 +25,5 @@ func TestInitAnswersAllPopulated(t *testing.T) {
 	}
 	if result.VaultToken != "test-token" {
 		t.Errorf("VaultToken = %q, want %q", result.VaultToken, "test-token")
-	}
-}
-
-func TestRunRemoveSelectNonTTY(t *testing.T) {
-	if info, err := os.Stdin.Stat(); err == nil && (info.Mode()&os.ModeCharDevice) == 0 {
-		t.Skip("non-TTY, skipping interactive test")
 	}
 }

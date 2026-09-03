@@ -61,26 +61,3 @@ func toStringMap(raw map[string]interface{}) (map[string]string, error) {
 	}
 	return result, nil
 }
-
-// WriteFile writes key-value pairs to a YAML or JSON file.
-func WriteFile(path string, data map[string]string) error {
-	ext := filepath.Ext(path)
-
-	var content []byte
-	var err error
-
-	switch ext {
-	case ".yaml", ".yml":
-		content, err = yaml.Marshal(data)
-	case ".json":
-		content, err = json.MarshalIndent(data, "", "  ")
-	default:
-		return fmt.Errorf("unsupported file format: %s", ext)
-	}
-
-	if err != nil {
-		return fmt.Errorf("marshal data: %w", err)
-	}
-
-	return os.WriteFile(path, content, 0o600)
-}
