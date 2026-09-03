@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"syscall"
 	"testing"
@@ -27,10 +28,7 @@ const (
 	vaultContainer       = "penhan-vault"
 )
 
-var (
-	penhanBinary string
-	projectDir   string
-)
+var penhanBinary string
 
 func TestMain(m *testing.M) {
 	if err := setup(); err != nil {
@@ -38,7 +36,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 	code := m.Run()
-	teardown()
+	_ = os.Remove(penhanBinary)
 	os.Exit(code)
 }
 
@@ -54,54 +52,41 @@ func setup() error {
 		return fmt.Errorf("build binary: %w", err)
 	}
 	penhanBinary = bin
-	projectDir, err = os.MkdirTemp("", "penhan-it-*")
-	if err != nil {
-		return fmt.Errorf("create project dir: %w", err)
-	}
 	return nil
-}
-
-func teardown() {
-	if projectDir != "" {
-		_ = os.RemoveAll(projectDir)
-	}
-	if penhanBinary != "" {
-		_ = os.Remove(penhanBinary)
-	}
 }
 
 func waitForVault(timeout time.Duration) error {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
-		resp, err := httpGet(vaultAddr + "/v1/sys/health")
-		if err == nil && resp == 200 {
+		status, err := httpGet(vaultAddr + "/v1/sys/health")
+		if err == nil && status == http.StatusOK {
 			return nil
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return fmt.Errorf("vault not ready within %s", timeout)
+	return fmt.Errorf("timeout after %s", timeout)
 }
 
-// resetMount recreates the KV v2 mount so every test starts from an empty Vault.
+// resetMount recreates the KV v2 mount so every run starts empty.
 func resetMount() error {
-	// Ignore disable errors: the mount may not exist yet.
-	_, _ = vaultDockerExec("secrets", "disable", mountPath)
-	if out, err := vaultDockerExec("secrets", "enable", "-path="+mountPath, "-version=2", "kv"); err != nil {
-		return fmt.Errorf("enable kv: %w: %s", err, out)
+	_, _ = vaultDockerExec("secrets", "disable", mountPath+"/")
+	out, err := vaultDockerExec("secrets", "enable", "-path="+mountPath, "-version=2", "kv")
+	if err != nil {
+		return fmt.Errorf("%w: %s", err, out)
 	}
 	return nil
 }
 
 func buildBinary() (string, error) {
-	tmpDir, err := os.MkdirTemp("", "penhan-bin-*")
-	if err != nil {
-		return "", err
-	}
-	bin := filepath.Join(tmpDir, "penhan")
 	root, err := findRepoRoot()
 	if err != nil {
 		return "", err
 	}
+	tmpDir, err := os.MkdirTemp("", "penhan-it-bin-*")
+	if err != nil {
+		return "", err
+	}
+	bin := filepath.Join(tmpDir, "penhan")
 	cmd := exec.Command("go", "build", "-o", bin, "./cmd/penhan")
 	cmd.Dir = root
 	out, err := cmd.CombinedOutput()
@@ -128,18 +113,67 @@ func findRepoRoot() (string, error) {
 	}
 }
 
+// newProject returns a fresh empty directory: the parent in which safes are created.
 func newProject(t *testing.T) string {
 	t.Helper()
-	if err := resetMount(); err != nil {
-		t.Fatalf("reset vault mount: %v", err)
+	return t.TempDir()
+}
+
+var unsafeChars = regexp.MustCompile(`[^a-zA-Z0-9_-]`)
+
+// safeNameFor derives a Vault-safe, per-test unique safe name so tests that
+// share the compose Vault never collide on base paths.
+func safeNameFor(t *testing.T) string {
+	t.Helper()
+	name := unsafeChars.ReplaceAllString(t.Name(), "-")
+	if len(name) > 60 {
+		name = name[len(name)-60:]
 	}
-	dir := t.TempDir()
-	for _, sub := range []string{"secrets", ".penhan/keys"} {
-		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
-			t.Fatal(err)
-		}
+	return strings.Trim(name, "-")
+}
+
+// safe is one created safe: its directory and its Vault base path.
+type safe struct {
+	Dir  string
+	Name string
+}
+
+// newVaultSafe creates a Vault-backed safe named after the test inside a
+// fresh project directory.
+func newVaultSafe(t *testing.T) safe {
+	t.Helper()
+	dir := newProject(t)
+	name := safeNameFor(t)
+	stdout, stderr, code := runPenhan(t, dir, "add", name,
+		"--encryption=aes",
+		"--backend=vault",
+		"--vault-addr="+vaultAddr,
+		"--vault-token="+vaultToken,
+	)
+	if code != 0 {
+		t.Fatalf("add failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}
-	return dir
+	return safe{Dir: filepath.Join(dir, name), Name: name}
+}
+
+// newFileSafe creates a safe backed by the encrypted file backend.
+func newFileSafe(t *testing.T) safe {
+	t.Helper()
+	dir := newProject(t)
+	name := safeNameFor(t)
+	stdout, stderr, code := runPenhan(t, dir, "add", name,
+		"--encryption=aes",
+		"--backend=file",
+	)
+	if code != 0 {
+		t.Fatalf("add failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	return safe{Dir: filepath.Join(dir, name), Name: name}
+}
+
+// vaultPath returns the KV path (without the data/ prefix) for a secret in this safe.
+func (s safe) vaultPath(secret string) string {
+	return mountPath + "/" + s.Name + "/" + secret
 }
 
 func runPenhan(t *testing.T, dir string, args ...string) (stdout, stderr string, exitCode int) {
@@ -149,7 +183,7 @@ func runPenhan(t *testing.T, dir string, args ...string) (stdout, stderr string,
 
 func runPenhanWithStdin(t *testing.T, dir string, stdin []byte, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, penhanBinary, args...)
 	cmd.Dir = dir
@@ -157,9 +191,8 @@ func runPenhanWithStdin(t *testing.T, dir string, stdin []byte, args ...string) 
 		"VAULT_ADDR="+vaultAddr,
 		"VAULT_TOKEN="+vaultToken,
 	)
-	if stdin != nil {
-		cmd.Stdin = strings.NewReader(string(stdin))
-	}
+	// Stdin is always a pipe so every command runs in non-TTY mode.
+	cmd.Stdin = strings.NewReader(string(stdin))
 	var outBuf, errBuf safeBuffer
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
@@ -168,54 +201,54 @@ func runPenhanWithStdin(t *testing.T, dir string, stdin []byte, args ...string) 
 		if ee, ok := err.(*exec.ExitError); ok {
 			return outBuf.String(), errBuf.String(), ee.Sys().(syscall.WaitStatus).ExitStatus()
 		}
-		t.Fatalf("run penhan: %v", err)
+		t.Fatalf("run penhan %v: %v", args, err)
 	}
 	return outBuf.String(), errBuf.String(), 0
 }
 
-type safeBuffer struct {
-	b []byte
-}
+type safeBuffer struct{ b []byte }
 
 func (s *safeBuffer) Write(p []byte) (int, error) {
 	s.b = append(s.b, p...)
 	return len(p), nil
 }
 
-func (s *safeBuffer) String() string {
-	return string(s.b)
-}
+func (s *safeBuffer) String() string { return string(s.b) }
 
-func initProject(t *testing.T, dir string) {
+// writeSecret writes a secret file at secrets/<rel> inside the safe.
+func writeSecret(t *testing.T, s safe, rel, content string) {
 	t.Helper()
-	stdout, stderr, code := runPenhan(t, dir, "init",
-		"--encryption=aes",
-		"--backend=vault",
-		"--vault-addr="+vaultAddr,
-		"--vault-token="+vaultToken,
-	)
-	if code != 0 {
-		t.Fatalf("init failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
-	}
-}
-
-// addSecret creates a secret file directly at secrets/<name>.yaml with the given value.
-func addSecret(t *testing.T, dir, name, value string) {
-	t.Helper()
-	p := filepath.Join(dir, "secrets", name+".yaml")
+	p := filepath.Join(s.Dir, "secrets", rel)
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(p, []byte("value: "+value+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
 
-func writeSecret(t *testing.T, dir, name, content string) {
+func fileExists(t *testing.T, s safe, rel string) bool {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, "secrets", name), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
+	_, err := os.Stat(filepath.Join(s.Dir, rel))
+	return err == nil
+}
+
+func mustPush(t *testing.T, s safe) string {
+	t.Helper()
+	stdout, stderr, code := runPenhan(t, s.Dir, "push")
+	if code != 0 {
+		t.Fatalf("push failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
 	}
+	return stdout
+}
+
+func mustCheck(t *testing.T, s safe) string {
+	t.Helper()
+	stdout, stderr, code := runPenhan(t, s.Dir, "check")
+	if code != 0 {
+		t.Fatalf("check failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
+	}
+	return stdout
 }
 
 func vaultCmd(t *testing.T, args ...string) (string, error) {
@@ -246,31 +279,24 @@ func httpGet(url string) (int, error) {
 	return resp.StatusCode, nil
 }
 
-// mustPush runs `penhan push`, answering the confirmation prompt, and fails the test on error.
-func mustPush(t *testing.T, dir string) {
+// vaultPut writes key=value pairs at the safe's path, simulating an edit made outside penhan.
+func vaultPut(t *testing.T, s safe, secret string, kv ...string) {
 	t.Helper()
-	stdout, stderr, code := runPenhanWithStdin(t, dir, []byte("y\n"), "push")
-	if code != 0 {
-		t.Fatalf("push failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
+	args := append([]string{"kv", "put", s.vaultPath(secret)}, kv...)
+	if out, err := vaultCmd(t, args...); err != nil {
+		t.Fatalf("vault kv put: %v: %s", err, out)
 	}
 }
 
-func readVaultData(t *testing.T, path string) map[string]interface{} {
+// readVaultData returns the secret's data, or nil when Vault has nothing there.
+func readVaultData(t *testing.T, s safe, secret string) map[string]interface{} {
 	t.Helper()
-	data, err := readVaultDataIfPresent(t, path)
+	out, err := vaultCmd(t, "kv", "get", "-format=json", s.vaultPath(secret))
 	if err != nil {
-		t.Fatalf("read vault %s: %v", path, err)
-	}
-	return data
-}
-
-// readVaultDataIfPresent returns the secret data at path, an error if the vault CLI
-// call fails, or an empty map if the secret exists but its latest version is deleted.
-func readVaultDataIfPresent(t *testing.T, path string) (map[string]interface{}, error) {
-	t.Helper()
-	out, err := vaultCmd(t, "kv", "get", "-format=json", mountPath+"/"+path)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s", err, out)
+		if strings.Contains(out, "No value found") {
+			return nil
+		}
+		t.Fatalf("vault kv get %s: %v: %s", secret, err, out)
 	}
 	var parsed struct {
 		Data struct {
@@ -278,7 +304,7 @@ func readVaultDataIfPresent(t *testing.T, path string) (map[string]interface{}, 
 		} `json:"data"`
 	}
 	if err := json.Unmarshal([]byte(out), &parsed); err != nil {
-		return nil, fmt.Errorf("parse vault json: %w", err)
+		t.Fatalf("parse vault json: %v", err)
 	}
-	return parsed.Data.Data, nil
+	return parsed.Data.Data
 }

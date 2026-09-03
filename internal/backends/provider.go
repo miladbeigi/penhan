@@ -1,5 +1,11 @@
 package backends
 
+import "errors"
+
+// ErrNotFound is returned by Pull when the backend holds no secret at the
+// requested path. Callers use errors.Is to tell "new secret" from a real failure.
+var ErrNotFound = errors.New("secret not found")
+
 // Encryptor handles encryption and decryption of data at rest.
 // Satisfied by crypto.Provider implementations.
 type Encryptor interface {
@@ -24,7 +30,8 @@ type Provider interface {
 	// Push uploads secret content to the backend.
 	Push(content []byte, remotePath string) error
 
-	// Pull downloads secret content from the backend.
+	// Pull downloads secret content from the backend. It returns an error
+	// wrapping ErrNotFound when nothing is stored at remotePath.
 	Pull(remotePath string) ([]byte, error)
 
 	// List returns all secret paths at the given remote path.

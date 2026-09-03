@@ -3,88 +3,78 @@
 package e2e
 
 import (
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	vaultapi "github.com/hashicorp/vault/api"
 )
 
-// vaultData reads a secret's data at the given KV v2 data path
-// (e.g. "secret/data/db"). Returns nil when the secret is absent
-// or its latest version is deleted.
-func vaultData(t *testing.T, v vaultEnv, path string) map[string]interface{} {
-	t.Helper()
-	cfg := vaultapi.DefaultConfig()
-	cfg.Address = v.addr
-	client, err := vaultapi.NewClient(cfg)
-	if err != nil {
-		t.Fatalf("vault client: %v", err)
-	}
-	client.SetToken(v.token)
-	secret, err := client.Logical().Read(path)
-	if err != nil {
-		t.Fatalf("vault read %s: %v", path, err)
-	}
-	if secret == nil || secret.Data == nil {
-		return nil
-	}
-	data, _ := secret.Data["data"].(map[string]interface{})
-	return data
-}
-
-// writeTokenFile drops a token file in dir and returns its path, for
-// commands that accept --vault-token-file.
-func writeTokenFile(t *testing.T, dir string, v vaultEnv) string {
-	t.Helper()
-	tokenFile := filepath.Join(dir, "test-token")
-	if err := os.WriteFile(tokenFile, []byte(v.token+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return tokenFile
-}
-
-// TestMultipleSafesIsolateBasePaths verifies safes push to distinct Vault
-// base paths and both remain independently reachable.
+// TestMultipleSafesIsolateBasePaths verifies that safes created side by side
+// push to distinct Vault base paths and never see each other's secrets.
 func TestMultipleSafesIsolateBasePaths(t *testing.T) {
 	vault := startVault(t)
 	dir := newProject(t)
-	tokenFile := writeTokenFile(t, dir, vault)
 
 	for _, name := range []string{"alpha", "beta"} {
-		stdout, stderr, code := run(t, dir, "", "safe", "add", name,
+		safe := addSafe(t, dir, name, vault)
+		writeFile(t, safe, "secrets/db.yaml", "owner: "+name+"\n")
+		stdout, stderr, code := run(t, safe, "", "push")
+		requireSuccess(t, "push in "+name, stdout, stderr, code)
+	}
+
+	for _, name := range []string{"alpha", "beta"} {
+		data := vaultData(t, vault, "secret/data/"+name+"/db")
+		if data == nil || data["owner"] != name {
+			t.Errorf("secret/data/%s/db should hold %s's secret, got %v", name, name, data)
+		}
+	}
+	if vaultData(t, vault, "secret/data/db") != nil {
+		t.Error("nothing should be written outside a safe base path")
+	}
+}
+
+// TestAddTokenFlagVariations covers the two ways to hand add a Vault token
+// non-interactively. Both must produce a safe that can push.
+func TestAddTokenFlagVariations(t *testing.T) {
+	vault := startVault(t)
+
+	t.Run("vault_token_flag", func(t *testing.T) {
+		dir := newProject(t)
+		stdout, stderr, code := run(t, dir, "", "add", "flag",
 			"--encryption=aes",
 			"--backend=vault",
 			"--vault-addr="+vault.addr,
-			"--vault-token-file="+tokenFile,
+			"--vault-token="+vault.token,
 		)
-		requireSuccess(t, "safe add "+name, stdout, stderr, code)
-	}
-
-	stdout, stderr, code := run(t, dir, "", "safe", "list")
-	requireSuccess(t, "safe list", stdout, stderr, code)
-	if !strings.Contains(stdout, "alpha") || !strings.Contains(stdout, "beta") {
-		t.Errorf("safe list should show both safes:\n%s", stdout)
-	}
-
-	for _, safe := range []string{"alpha", "beta"} {
-		safeDir := filepath.Join(dir, safe)
-		writeFile(t, safeDir, "secrets/db.yaml", "key: value\n")
-
-		stdout, stderr, code := run(t, safeDir, "y\n", "push")
-		requireSuccess(t, "push in "+safe, stdout, stderr, code)
-
-		if data := vaultData(t, vault, "secret/data/"+safe+"/db"); data == nil {
-			t.Errorf("secret missing at secret/data/%s/db", safe)
+		requireSuccess(t, "add", stdout, stderr, code)
+		if !strings.Contains(stderr, "Warning") {
+			t.Errorf("add --vault-token should warn on stderr, got:\n%s", stderr)
 		}
-	}
+		assertPushWorks(t, filepath.Join(dir, "flag"))
+	})
 
-	// Each safe's own Vault base path must not contain the other's secret.
-	if data := vaultData(t, vault, "secret/data/alpha/db"); data == nil || data["key"] != "value" {
-		t.Errorf("alpha base path should hold alpha's secret, got: %v", data)
+	t.Run("vault_token_file", func(t *testing.T) {
+		dir := newProject(t)
+		assertPushWorks(t, addSafe(t, dir, "file", vault))
+	})
+}
+
+func assertPushWorks(t *testing.T, safe string) {
+	t.Helper()
+	requireFile(t, safe, ".penhan/vault-token")
+	writeFile(t, safe, "secrets/auth.yaml", "key: value\n")
+	stdout, stderr, code := run(t, safe, "", "push")
+	requireSuccess(t, "push", stdout, stderr, code)
+	requireContains(t, "push", stdout, "Push complete")
+}
+
+// TestAddNonInteractiveRequiresFlags verifies scripts get a clear error
+// instead of a hung prompt.
+func TestAddNonInteractiveRequiresFlags(t *testing.T) {
+	dir := newProject(t)
+	stdout, stderr, code := run(t, dir, "", "add")
+	if code == 0 {
+		t.Fatalf("add without flags on a pipe must fail:\n%s", stdout)
 	}
-	if data := vaultData(t, vault, "secret/data/beta/db"); data == nil || data["key"] != "value" {
-		t.Errorf("beta base path should hold beta's secret, got: %v", data)
-	}
+	requireContains(t, "add", stdout+stderr, "non-interactive")
+	requireContains(t, "add", stdout+stderr, "--encryption")
 }

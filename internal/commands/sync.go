@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/miladbeigi/penhan/internal/backends"
 	"github.com/miladbeigi/penhan/internal/config"
 	"github.com/miladbeigi/penhan/internal/crypto"
 	"github.com/miladbeigi/penhan/internal/secrets"
-	"github.com/miladbeigi/penhan/internal/state"
 )
 
 // newCryptoProvider builds and initializes the encryption provider from config.
@@ -43,18 +43,17 @@ func newCryptoProvider(cfg *config.Config) (crypto.Provider, error) {
 }
 
 // newBackend builds and initializes the configured backend provider.
-func newBackend(cfg *config.Config) (backends.Provider, error) {
+func newBackend(cfg *config.Config, provider crypto.Provider) (backends.Provider, error) {
 	switch cfg.Backend.Type {
 	case "", "vault":
 		return newVaultBackend(cfg)
 	case "file":
-		return newFileBackend(cfg)
+		return newFileBackend(cfg, provider)
 	default:
 		return nil, fmt.Errorf("unsupported backend type: %s", cfg.Backend.Type)
 	}
 }
 
-// newVaultBackend builds and initializes the Vault backend from config.
 func newVaultBackend(cfg *config.Config) (*backends.VaultProvider, error) {
 	backend := backends.NewVaultProvider()
 	token, err := os.ReadFile(cfg.Backend.Vault.TokenPath)
@@ -72,23 +71,14 @@ func newVaultBackend(cfg *config.Config) (*backends.VaultProvider, error) {
 	return backend, nil
 }
 
-// newFileBackend builds and initializes the file backend from config.
-func newFileBackend(cfg *config.Config) (*backends.FileProvider, error) {
-	provider, err := newCryptoProvider(cfg)
-	if err != nil {
-		return nil, err
-	}
-
+func newFileBackend(cfg *config.Config, provider crypto.Provider) (*backends.FileProvider, error) {
 	dir := cfg.Backend.File.Path
 	if dir == "" {
 		dir = ".penhan/remote"
 	}
 
 	backend := backends.NewFileProvider()
-	if err := backend.Setup(backends.SetupOptions{
-		Dir: dir,
-		Enc: provider,
-	}); err != nil {
+	if err := backend.Setup(backends.SetupOptions{Dir: dir, Enc: provider}); err != nil {
 		return nil, err
 	}
 
@@ -99,12 +89,21 @@ func newFileBackend(cfg *config.Config) (*backends.FileProvider, error) {
 	return backend, nil
 }
 
-// collectLocalSecrets walks the secrets directory and returns each secret's
-// content as canonical JSON, keyed by its Vault path. Encrypted files are
-// decrypted with provider; when both plaintext and .enc exist for the same
-// secret, the plaintext wins (it is the editable copy).
-func collectLocalSecrets(cfg *config.Config, provider crypto.Provider) (map[string][]byte, error) {
-	local := make(map[string][]byte)
+// localSecret is one secret file found under the secrets directory, with its
+// content canonicalized to JSON so hashes are stable across YAML/JSON and
+// key order.
+type localSecret struct {
+	Path    string // backend path, e.g. "db/password"
+	Content []byte // canonical JSON
+	Hash    string
+}
+
+// collectLocalSecrets walks the secrets directory and returns each secret,
+// sorted by path. Encrypted files are decrypted with provider; when both
+// plaintext and .enc exist for the same secret, the plaintext wins (it is
+// the editable copy).
+func collectLocalSecrets(cfg *config.Config, provider crypto.Provider) ([]localSecret, error) {
+	byPath := make(map[string]localSecret)
 
 	err := filepath.Walk(cfg.Secrets.Path, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -124,8 +123,8 @@ func collectLocalSecrets(cfg *config.Config, provider crypto.Provider) (map[stri
 			return nil
 		}
 
-		vaultPath := secrets.LocalToVault(name, cfg.Secrets.Path)
-		if _, seen := local[vaultPath]; seen && isEnc {
+		remotePath := secrets.LocalToVault(name, cfg.Secrets.Path)
+		if _, seen := byPath[remotePath]; seen && isEnc {
 			return nil
 		}
 
@@ -148,80 +147,49 @@ func collectLocalSecrets(cfg *config.Config, provider crypto.Provider) (map[stri
 			return err
 		}
 
-		local[vaultPath] = content
+		byPath[remotePath] = localSecret{Path: remotePath, Content: content, Hash: hashContent(content)}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return local, nil
-}
-
-// buildLocalState derives a plan-ready state from the local secret files,
-// marking entries changed when their content differs from the last sync.
-func buildLocalState(prev *state.State, local map[string][]byte) *state.State {
-	localState := state.NewState()
-	for path, content := range local {
-		hash := hashContent(content)
-		status := "local_changed"
-		if entry, ok := prev.Secrets[path]; ok && entry.LocalHash == hash {
-			status = "synced"
-		}
-		localState.Secrets[path] = state.SecretEntry{LocalHash: hash, Status: status}
+	list := make([]localSecret, 0, len(byPath))
+	for _, s := range byPath {
+		list = append(list, s)
 	}
-	return localState
+	sort.Slice(list, func(i, j int) bool { return list[i].Path < list[j].Path })
+	return list, nil
 }
 
-func buildRemoteState(prev *state.State, backend backends.Provider) (*state.State, error) {
-	remoteState := state.NewState()
-	paths, err := backend.List("")
+// remoteHash returns the hash of the secret stored at path, or "" when the
+// backend has nothing there. Any other backend failure is returned as is.
+func remoteHash(backend backends.Provider, path string) (string, error) {
+	content, err := backend.Pull(path)
 	if err != nil {
-		return nil, err
-	}
-	for _, path := range paths {
-		content, err := backend.Pull(path)
-		if err != nil {
-			continue
+		if errors.Is(err, backends.ErrNotFound) {
+			return "", nil
 		}
-		hash := hashContent(content)
-		status := "remote_changed"
-		if entry, ok := prev.Secrets[path]; ok && entry.RemoteHash == hash {
-			status = "synced"
-		}
-		remoteState.Secrets[path] = state.SecretEntry{LocalHash: hash, Status: status}
+		return "", fmt.Errorf("read %s from backend: %w", path, err)
 	}
-	return remoteState, nil
+	return hashContent(canonicalJSON(content)), nil
 }
 
-func fetchRemoteState(backend backends.Provider) (*state.State, error) {
-	remoteState := state.NewState()
-	paths, err := backend.List("")
+// canonicalJSON re-encodes JSON so key order and whitespace cannot make two
+// equal documents hash differently. Content that is not a JSON object is
+// returned unchanged.
+func canonicalJSON(content []byte) []byte {
+	var data map[string]interface{}
+	if err := json.Unmarshal(content, &data); err != nil {
+		return content
+	}
+	out, err := json.Marshal(data)
 	if err != nil {
-		return nil, err
+		return content
 	}
-	for _, path := range paths {
-		content, err := backend.Pull(path)
-		if err != nil {
-			continue
-		}
-		remoteState.Secrets[path] = state.SecretEntry{LocalHash: hashContent(content)}
-	}
-	return remoteState, nil
+	return out
 }
 
 func hashContent(content []byte) string {
 	return fmt.Sprintf("sha256:%x", sha256.Sum256(content))
-}
-
-// loadStateOrNew reads the state file, returning a fresh state when it does not exist.
-func loadStateOrNew(statePath string) (*state.State, error) {
-	s, err := state.Load(statePath)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return state.NewState(), nil
-		}
-		return nil, fmt.Errorf("load state: %w", err)
-	}
-	return s, nil
 }

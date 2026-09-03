@@ -53,33 +53,6 @@ func TestParseJSONFile(t *testing.T) {
 	}
 }
 
-func TestWriteParseRoundtrip(t *testing.T) {
-	dir := t.TempDir()
-	filePath := filepath.Join(dir, "secret.yaml")
-
-	original := map[string]string{
-		"username": "admin",
-		"password": "s3cret",
-	}
-
-	if err := WriteFile(filePath, original); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	parsed, err := ParseFile(filePath)
-	if err != nil {
-		t.Fatalf("ParseFile() error = %v", err)
-	}
-
-	for k, v := range original {
-		if parsed[k] != v {
-			t.Errorf("parsed[%s] = %q, want %q", k, parsed[k], v)
-		}
-	}
-}
-
-// Nested structures cannot be represented as flat key-value pairs; silently
-// stringifying them (fmt "%v" → "map[a:1]") corrupts the secret. Reject them.
 func TestParseRejectsNestedYAMLValues(t *testing.T) {
 	_, err := Parse([]byte("db:\n  host: localhost\n  port: 5432\n"), ".yaml")
 	if err == nil {

@@ -37,7 +37,7 @@ leftover state:
 
 ```bash
 make test-e2e             # Requires Docker
-go test -tags=e2e -run TestSyncJourneyPushPull ./e2e/...  # Single scenario
+go test -tags=e2e -run TestFullJourney ./e2e/...  # Single scenario
 ```
 
 ## Project Structure
@@ -45,20 +45,20 @@ go test -tags=e2e -run TestSyncJourneyPushPull ./e2e/...  # Single scenario
 ```
 cmd/penhan/          # CLI entrypoint (Cobra)
 e2e/                 # E2E tests (real CLI against real Vault, build tag: e2e)
+integration/         # Integration tests (real CLI against compose Vault, build tag: integration)
 internal/
-  backends/          # Vault provider (KV v2)
-  commands/          # CLI commands (remove, push, pull, plan, etc.)
+  backends/          # Backend providers: Vault KV v2, encrypted file
+  commands/          # CLI commands: add, check, push, encrypt, decrypt, version
   config/            # YAML config parsing
-  crypto/            # GPG/AES encryption providers
+  crypto/            # GPG / GitHub GPG / AES encryption providers
   prompt/            # TUI prompts (charmbracelet/huh)
-  secrets/           # YAML/JSON parsing
-  state/             # Sync state tracking (hash-based conflict detection)
+  secrets/           # YAML/JSON parsing and path mapping
 ```
 
 ## Testing Single Components
 
 ```bash
-go test ./internal/state/...     # Single package
-go test -run TestPush ./...      # Single test
-go test -tags=integration -run TestPull ./integration/...  # Single integration test
+go test ./internal/commands/...  # Single package
+go test -run TestCheck ./...     # Single test
+go test -tags=integration -run TestPush ./integration/...  # Single integration test
 ```
