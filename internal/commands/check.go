@@ -45,7 +45,7 @@ func init() {
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
-	cfg, err := config.Load("penhan.yaml")
+	cfg, err := loadSafeConfig()
 	if err != nil {
 		return err
 	}

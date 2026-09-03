@@ -3,7 +3,6 @@ package commands
 import (
 	"fmt"
 
-	"github.com/miladbeigi/penhan/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -22,7 +21,7 @@ func init() {
 }
 
 func runPush(cmd *cobra.Command, args []string) error {
-	cfg, err := config.Load("penhan.yaml")
+	cfg, err := loadSafeConfig()
 	if err != nil {
 		return err
 	}
