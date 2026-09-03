@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- `penhan add` wrote safe-relative patterns (`.penhan/vault-token`, `.penhan/keys/`, `secrets/*.yaml`) to the project-root `.gitignore`. Patterns containing a slash are anchored to that directory, so git never matched the files inside the safe and keys, tokens, and plaintext secrets were left untracked but not ignored. Entries are now prefixed with the safe directory.
+- `penhan add` wrote safe-relative patterns (`.penhan/vault-token`, `.penhan/keys/`, `secrets/*.yaml`) to the project-root `.gitignore`. Patterns containing a slash are anchored to that directory, so git never matched the files inside the safe and keys, tokens, and plaintext secrets were left untracked but not ignored. Entries are now prefixed with the safe directory, and the plaintext patterns use `**` so secrets in subdirectories such as `secrets/db/password.yaml` are ignored too.
 
 ## [0.5.0] - 2026-09-03
 

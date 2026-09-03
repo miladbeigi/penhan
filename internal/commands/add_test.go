@@ -246,9 +246,9 @@ func TestAppendGitignore_CorruptFile(t *testing.T) {
 func TestGitignoreEntries_PrefixedWithSafeDir(t *testing.T) {
 	got := gitignoreEntries("vault", "vault")
 	want := []string{
-		"vault/secrets/*.yaml",
-		"vault/secrets/*.yml",
-		"vault/secrets/*.json",
+		"vault/secrets/**/*.yaml",
+		"vault/secrets/**/*.yml",
+		"vault/secrets/**/*.json",
 		"vault/.penhan/keys/",
 		"vault/.penhan/vault-token",
 	}

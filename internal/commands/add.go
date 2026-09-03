@@ -240,11 +240,13 @@ func createSafe(answers *prompt.InitAnswers) error {
 // keys, and credentials out of git. The .gitignore lives in the project root,
 // and any pattern containing a slash is anchored to that directory, so each
 // entry is prefixed with the safe directory or git would never match it.
+// Secrets may live in subdirectories (secrets/db/password.yaml), and "*"
+// does not cross "/", so the plaintext patterns use "**".
 func gitignoreEntries(dir, backend string) []string {
 	entries := []string{
-		dir + "/secrets/*.yaml",
-		dir + "/secrets/*.yml",
-		dir + "/secrets/*.json",
+		dir + "/secrets/**/*.yaml",
+		dir + "/secrets/**/*.yml",
+		dir + "/secrets/**/*.json",
 		dir + "/.penhan/keys/",
 	}
 	if backend == "vault" {
