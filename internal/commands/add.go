@@ -26,6 +26,14 @@ Run it interactively, or pass every option as a flag for scripts and CI.`,
 	RunE: runAdd,
 }
 
+var (
+	newGPGProvider       = func() crypto.Provider { return crypto.NewGPGProvider() }
+	newGitHubGPGProvider = func() crypto.Provider {
+		return crypto.NewGitHubGPGProvider()
+	}
+	newAESProvider = func() crypto.Provider { return crypto.NewAESProvider() }
+)
+
 func init() {
 	addCmd.Flags().String("encryption", "", "Encryption method (gpg/aes/github-gpg)")
 	addCmd.Flags().String("github-username", "", "GitHub username (for github-gpg encryption)")
@@ -158,12 +166,23 @@ func validateVaultAddress(addr string) error {
 
 // createSafe builds the safe directory: penhan.yaml, the secrets directory,
 // the encryption key, backend credentials, and .gitignore entries.
-func createSafe(answers *prompt.InitAnswers) error {
+func createSafe(answers *prompt.InitAnswers) (retErr error) {
 	dir := answers.SafeName
 	penhanPath := filepath.Join(dir, "penhan.yaml")
 	if _, err := os.Stat(penhanPath); err == nil {
 		return fmt.Errorf("%s already exists; safe %q is already initialized", penhanPath, dir)
 	}
+	created := false
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		created = true
+	} else if err != nil {
+		return fmt.Errorf("check safe directory: %w", err)
+	}
+	defer func() {
+		if retErr != nil && created {
+			_ = os.RemoveAll(dir)
+		}
+	}()
 
 	method := answers.Encryption
 	relKeyPath := filepath.Join(".penhan", "keys", method+".key")
@@ -213,12 +232,12 @@ func createSafe(answers *prompt.InitAnswers) error {
 	providerArgs := ""
 	switch method {
 	case "gpg":
-		provider = crypto.NewGPGProvider()
+		provider = newGPGProvider()
 	case "github-gpg":
-		provider = crypto.NewGitHubGPGProvider()
+		provider = newGitHubGPGProvider()
 		providerArgs = answers.GitHubUsername
 	case "aes":
-		provider = crypto.NewAESProvider()
+		provider = newAESProvider()
 	}
 	if err := provider.Setup(absKeyPath, providerArgs); err != nil {
 		return err
