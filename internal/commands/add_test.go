@@ -380,6 +380,41 @@ func TestCreateSafe_GitHubGPGSetupFailureDoesNotUpdateGitignore(t *testing.T) {
 	}
 }
 
+func TestStdinIsTTY_FalseForDevNull(t *testing.T) {
+	orig := os.Stdin
+	t.Cleanup(func() { os.Stdin = orig })
+
+	devNull, err := os.Open(os.DevNull)
+	if err != nil {
+		t.Skipf("open %s: %v", os.DevNull, err)
+	}
+	t.Cleanup(func() { _ = devNull.Close() })
+
+	os.Stdin = devNull
+	if stdinIsTTY() {
+		t.Fatalf("stdinIsTTY() = true, want false for %s", os.DevNull)
+	}
+}
+
+func TestStdinIsTTY_FalseForPipe(t *testing.T) {
+	orig := os.Stdin
+	t.Cleanup(func() { os.Stdin = orig })
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = r.Close()
+		_ = w.Close()
+	})
+
+	os.Stdin = r
+	if stdinIsTTY() {
+		t.Fatal("stdinIsTTY() = true, want false for pipe stdin")
+	}
+}
+
 type failingProvider struct{}
 
 func (failingProvider) Encrypt([]byte) ([]byte, error) { return nil, nil }

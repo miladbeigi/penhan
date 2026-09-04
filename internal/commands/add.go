@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/charmbracelet/x/term"
 	"github.com/miladbeigi/penhan/internal/config"
 	"github.com/miladbeigi/penhan/internal/crypto"
 	"github.com/miladbeigi/penhan/internal/prompt"
@@ -123,8 +124,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 }
 
 func stdinIsTTY() bool {
-	info, err := os.Stdin.Stat()
-	return err == nil && (info.Mode()&os.ModeCharDevice) != 0
+	return term.IsTerminal(os.Stdin.Fd())
 }
 
 // missingFlags lists what non-interactive mode still needs before it can
