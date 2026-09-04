@@ -16,6 +16,16 @@ import (
 	"github.com/miladbeigi/penhan/internal/secrets"
 )
 
+// loadSafeConfig reads penhan.yaml from the current directory and turns the
+// missing-file case into a message that says how to fix it.
+func loadSafeConfig() (*config.Config, error) {
+	cfg, err := config.Load("penhan.yaml")
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("no penhan.yaml in the current directory; run this command inside a safe (created with `penhan add`)")
+	}
+	return cfg, err
+}
+
 // newCryptoProvider builds and initializes the encryption provider from config.
 func newCryptoProvider(cfg *config.Config) (crypto.Provider, error) {
 	switch cfg.Encryption.Method {

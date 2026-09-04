@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/miladbeigi/penhan/internal/config"
 	"github.com/miladbeigi/penhan/internal/crypto"
 	"github.com/spf13/cobra"
 )
@@ -22,7 +21,7 @@ func init() {
 }
 
 func runEncrypt(cmd *cobra.Command, args []string) error {
-	cfg, err := config.Load("penhan.yaml")
+	cfg, err := loadSafeConfig()
 	if err != nil {
 		return err
 	}

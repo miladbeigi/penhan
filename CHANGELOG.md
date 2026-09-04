@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- `penhan check`, `penhan push`, `penhan encrypt`, and `penhan decrypt` now return a helpful error when run outside a safe: `no penhan.yaml in the current directory; run this command inside a safe (created with \`penhan add\`)`.
+
 ### Fixed
 
 - `penhan add` wrote safe-relative patterns (`.penhan/vault-token`, `.penhan/keys/`, `secrets/*.yaml`) to the project-root `.gitignore`. Patterns containing a slash are anchored to that directory, so git never matched the files inside the safe and keys, tokens, and plaintext secrets were left untracked but not ignored. Entries are now prefixed with the safe directory.
