@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-04
+
 ### Changed
 
 - `penhan check`, `penhan push`, `penhan encrypt`, and `penhan decrypt` now return a helpful error when run outside a safe: `no penhan.yaml in the current directory; run this command inside a safe (created with \`penhan add\`)`.
