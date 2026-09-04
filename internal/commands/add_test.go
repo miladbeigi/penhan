@@ -1,10 +1,14 @@
 package commands
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/miladbeigi/penhan/internal/crypto"
+	"github.com/miladbeigi/penhan/internal/prompt"
 )
 
 func TestAppendGitignore_CreatesNewFile(t *testing.T) {
@@ -272,3 +276,114 @@ func TestGitignoreEntries_FileBackendHasNoToken(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateSafe_GitHubGPGSetupFailureRollsBackNewDirectory(t *testing.T) {
+	tmp := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+
+	origProvider := newGitHubGPGProvider
+	newGitHubGPGProvider = func() crypto.Provider { return failingProvider{} }
+	t.Cleanup(func() { newGitHubGPGProvider = origProvider })
+
+	safeName := "myapp"
+	err = createSafe(&prompt.InitAnswers{
+		SafeName:       safeName,
+		Encryption:     "github-gpg",
+		GitHubUsername: "this-user-does-not-exist-xyz-123456",
+		Backend:        "file",
+	})
+	if err == nil {
+		t.Fatal("expected createSafe to fail for invalid github username")
+	}
+	if _, statErr := os.Stat(filepath.Join(tmp, safeName)); !os.IsNotExist(statErr) {
+		t.Fatalf("expected %q to be removed after failed add, stat err = %v", safeName, statErr)
+	}
+}
+
+func TestCreateSafe_GitHubGPGSetupFailureKeepsPreExistingDirectory(t *testing.T) {
+	tmp := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+
+	origProvider := newGitHubGPGProvider
+	newGitHubGPGProvider = func() crypto.Provider { return failingProvider{} }
+	t.Cleanup(func() { newGitHubGPGProvider = origProvider })
+
+	safeName := "myapp"
+	if err := os.Mkdir(filepath.Join(tmp, safeName), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	err = createSafe(&prompt.InitAnswers{
+		SafeName:       safeName,
+		Encryption:     "github-gpg",
+		GitHubUsername: "this-user-does-not-exist-xyz-123456",
+		Backend:        "file",
+	})
+	if err == nil {
+		t.Fatal("expected createSafe to fail for invalid github username")
+	}
+	if _, statErr := os.Stat(filepath.Join(tmp, safeName)); statErr != nil {
+		t.Fatalf("expected pre-existing directory %q to be kept, stat err = %v", safeName, statErr)
+	}
+}
+
+func TestCreateSafe_GitHubGPGSetupFailureDoesNotUpdateGitignore(t *testing.T) {
+	tmp := t.TempDir()
+	orig, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+
+	origProvider := newGitHubGPGProvider
+	newGitHubGPGProvider = func() crypto.Provider { return failingProvider{} }
+	t.Cleanup(func() { newGitHubGPGProvider = origProvider })
+
+	before := "node_modules/\n"
+	if err := os.WriteFile(".gitignore", []byte(before), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err = createSafe(&prompt.InitAnswers{
+		SafeName:       "myapp",
+		Encryption:     "github-gpg",
+		GitHubUsername: "this-user-does-not-exist-xyz-123456",
+		Backend:        "file",
+	})
+	if err == nil {
+		t.Fatal("expected createSafe to fail for invalid github username")
+	}
+
+	after, err := os.ReadFile(".gitignore")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != before {
+		t.Fatalf("expected .gitignore to remain unchanged, got %q, want %q", string(after), before)
+	}
+}
+
+type failingProvider struct{}
+
+func (failingProvider) Encrypt([]byte) ([]byte, error) { return nil, nil }
+func (failingProvider) Decrypt([]byte) ([]byte, error) { return nil, nil }
+func (failingProvider) Setup(string, string) error     { return errors.New("setup failed") }
+func (failingProvider) IsInitialized() bool            { return false }
+func (failingProvider) SealOnly() bool                 { return true }
