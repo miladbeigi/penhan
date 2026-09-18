@@ -120,7 +120,8 @@ my-project/
     └── .penhan/               # keys and credentials (gitignored)
         ├── keys/
         │   └── aes.key        # key file named after the encryption method
-        └── vault-token
+        ├── vault-token        # gitignored (vault backend only)
+        └── remote/            # file backend only: encrypted copies, safe to commit
 ```
 
 Each safe sets its backend base path to its own name, so several safes can share one Vault without path collisions.
@@ -177,7 +178,7 @@ backend:
     mount_path: secret
     base_path: myapp   # the safe name
   # file:
-  #   path: .penhan/remote   # encrypted copies written here instead of Vault
+  #   path: .penhan/remote   # encrypted copies written here; safe to commit via git
 
 secrets:
   path: secrets/
