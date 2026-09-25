@@ -47,16 +47,23 @@ go test -tags=e2e -run TestKubernetesBackend ./e2e/...  # Kubernetes scenarios
 
 ```
 cmd/penhan/          # CLI entrypoint (Cobra)
+docs/                # User documentation (linked from README.md); demo/ holds the VHS demo
 e2e/                 # E2E tests (real CLI against real Vault and k3s, build tag: e2e)
 integration/         # Integration tests (real CLI against compose Vault, build tag: integration)
 internal/
   backends/          # Backend providers: Vault KV v2, Kubernetes Secrets, encrypted file
-  commands/          # CLI commands: add, check, push, encrypt, decrypt, version
+  commands/          # CLI commands: add, check, push, encrypt, decrypt, import, update, version
   config/            # YAML config parsing
   crypto/            # GPG / AES encryption providers
   prompt/            # TUI prompts (charmbracelet/huh)
   secrets/           # YAML/JSON parsing and path mapping
+  update/            # Self-update from GitHub releases
+.github/scripts/     # release-plan.sh: decides releases from CHANGELOG.md
 ```
+
+## Documentation
+
+The README is a short overview; details live in `docs/`. When a change affects users, update the matching page in `docs/` and add an entry under `## [Unreleased]` in `CHANGELOG.md`. Releases are cut by versioning that section (see CONTRIBUTING.md). If CLI output changes, re-record the demo with `make demo`.
 
 ## Testing Single Components
 

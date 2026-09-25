@@ -34,7 +34,7 @@ var (
 
 func init() {
 	updateCmd.Flags().Bool("check", false, "Only report whether a newer release exists")
-	updateCmd.Flags().Bool("force", false, "Install the latest release even if this build is newer or a development build")
+	updateCmd.Flags().Bool("force", false, "Replace a development build with the latest release (never downgrades)")
 	rootCmd.AddCommand(updateCmd)
 }
 

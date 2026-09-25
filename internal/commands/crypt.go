@@ -15,7 +15,7 @@ import (
 
 var encryptCmd = &cobra.Command{
 	Use:   "encrypt [file|dir]...",
-	Short: "Encrypt secret files in place",
+	Short: "Encrypt secret files for committing to git",
 	Long: `Encrypt replaces each plaintext secret file (.yaml, .yml, .json) with an
 encrypted .enc copy for committing to git. With no arguments it encrypts the
 whole secrets directory. Other files are left alone.
@@ -30,7 +30,7 @@ plaintext, it is kept byte for byte, so git only shows secrets that changed.`,
 
 var decryptCmd = &cobra.Command{
 	Use:   "decrypt [file|dir]...",
-	Short: "Decrypt secret files in place",
+	Short: "Decrypt .enc files for editing",
 	Long: `Decrypt writes the plaintext of each .enc file next to it, for editing.
 The .enc file is kept, so encrypt can tell whether anything changed. With no
 arguments it decrypts the whole secrets directory. It refuses to overwrite a

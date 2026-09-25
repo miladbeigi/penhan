@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: ci fmt vet lint test test-integration test-e2e integration-up integration-down build tidy release help
+.PHONY: ci fmt vet lint test test-integration test-e2e integration-up integration-down build tidy release demo help
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "none")
@@ -62,6 +62,9 @@ tidy: ## Check go mod tidy
 	go mod tidy
 	@git diff --exit-code go.mod
 	@test ! -f go.sum || git diff --exit-code go.sum
+
+demo: ## Re-record the README demo GIF (requires vhs and Docker)
+	vhs docs/demo/demo.tape
 
 release: ## Run GoReleaser to create a release
 	goreleaser release --clean
