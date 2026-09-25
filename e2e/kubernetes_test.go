@@ -268,6 +268,84 @@ func TestKubernetesBackend(t *testing.T) {
 		}
 	})
 
+	// Existing Secrets created by hand are taken over without changing their
+	// data; Secrets other tools own are left alone.
+	t.Run("import", func(t *testing.T) {
+		k.createNamespace(t, "legacy")
+		create := func(s *corev1.Secret) {
+			t.Helper()
+			s.Namespace = "legacy"
+			if _, err := k.client.CoreV1().Secrets("legacy").Create(context.Background(), s, metav1.CreateOptions{}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		create(&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "api", Labels: map[string]string{"app": "api"}},
+			Type:       corev1.SecretTypeOpaque,
+			Data:       map[string][]byte{"PIN": []byte("0012"), "creds.json": []byte("{\"a\": 1}\n")},
+		})
+		create(&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "ghcr"},
+			Type:       corev1.SecretTypeDockerConfigJson,
+			Data:       map[string][]byte{".dockerconfigjson": []byte(`{"auths":{}}`)},
+		})
+		create(&corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: "chart", Annotations: map[string]string{"meta.helm.sh/release-name": "chart"}},
+			Data:       map[string][]byte{"k": []byte("v")},
+		})
+
+		safe := addK8sSafe(t, newProject(t), "legacy", "legacy", k)
+
+		stdout, stderr, code := run(t, safe, "import")
+		requireSuccess(t, "import list", stdout, stderr, code)
+		requireContains(t, "import list", stdout, "ready     api (2 key(s))")
+		requireContains(t, "import list", stdout, "skip      ghcr: type kubernetes.io/dockerconfigjson is not supported")
+		requireContains(t, "import list", stdout, "skip      chart: managed by Helm release chart")
+		if k.secret(t, "legacy", "api").Labels["app.kubernetes.io/managed-by"] != "" {
+			t.Fatal("listing must not change anything")
+		}
+
+		stdout, stderr, code = run(t, safe, "import", "--all")
+		requireSuccess(t, "import --all", stdout, stderr, code)
+		requireContains(t, "import --all", stdout, "Imported: api")
+		requireFile(t, safe, "secrets/api.yaml.enc")
+		requireNoFile(t, safe, "secrets/api.yaml")
+		requireNoFile(t, safe, "secrets/ghcr.yaml.enc")
+		if strings.Contains(readFile(t, safe, "secrets/api.yaml.enc"), "0012") {
+			t.Error("imported file must be encrypted")
+		}
+
+		api := k.secret(t, "legacy", "api")
+		if string(api.Data["PIN"]) != "0012" || string(api.Data["creds.json"]) != "{\"a\": 1}\n" || api.Labels["app"] != "api" {
+			t.Errorf("import changed the Secret: data=%q labels=%v", api.Data, api.Labels)
+		}
+		if api.Labels["app.kubernetes.io/managed-by"] != "penhan" || api.Annotations["penhan/safe"] != "legacy" {
+			t.Errorf("import must mark the Secret as managed: %v %v", api.Labels, api.Annotations)
+		}
+
+		stdout, stderr, code = run(t, safe, "check")
+		requireSuccess(t, "check after import", stdout, stderr, code)
+		requireContains(t, "check after import", stdout, "unchanged  api")
+
+		stdout, stderr, code = run(t, safe, "import", "api")
+		if code == 0 {
+			t.Fatalf("re-importing over the local file must fail:\n%s", stdout)
+		}
+		requireContains(t, "re-import", stderr, "already exists")
+
+		// From here on it is managed like any other secret.
+		stdout, stderr, code = run(t, safe, "decrypt")
+		requireSuccess(t, "decrypt", stdout, stderr, code)
+		writeFile(t, safe, "secrets/api.yaml", readFile(t, safe, "secrets/api.yaml")+"NEW_KEY: added\n")
+		stdout, stderr, code = run(t, safe, "push")
+		requireSuccess(t, "push", stdout, stderr, code)
+		requireContains(t, "push", stdout, "Pushed (changed): api")
+		api = k.secret(t, "legacy", "api")
+		if string(api.Data["NEW_KEY"]) != "added" || string(api.Data["PIN"]) != "0012" {
+			t.Errorf("push after import = %q", api.Data)
+		}
+	})
+
 	t.Run("add_requires_namespace", func(t *testing.T) {
 		stdout, stderr, code := run(t, newProject(t), "add", "nons",
 			"--encryption=aes", "--backend=kubernetes", "--kubeconfig="+k.kubeconfig)

@@ -3,6 +3,7 @@ package commands
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -250,9 +251,9 @@ func TestAppendGitignore_CorruptFile(t *testing.T) {
 func TestGitignoreEntries_PrefixedWithSafeDir(t *testing.T) {
 	got := gitignoreEntries("vault", "vault")
 	want := []string{
-		"vault/secrets/*.yaml",
-		"vault/secrets/*.yml",
-		"vault/secrets/*.json",
+		"vault/secrets/**/*.yaml",
+		"vault/secrets/**/*.yml",
+		"vault/secrets/**/*.json",
 		"vault/.penhan/keys/",
 		"vault/.penhan/vault-token",
 	}
@@ -490,5 +491,50 @@ func TestCreateSafe_Kubernetes(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join("myapp", ".penhan", "vault-token")); !os.IsNotExist(err) {
 		t.Error("kubernetes backend must not write a vault token")
+	}
+}
+
+// Ask git itself: plaintext at any depth under secrets/ and the keys must be
+// ignored, while the encrypted copies and penhan.yaml must stay committable.
+func TestGitignoreEntries_MatchedByGit(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	dir := t.TempDir()
+	orig, _ := os.Getwd()
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+
+	if out, err := exec.Command("git", "init", "-q").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v: %s", err, out)
+	}
+	if err := appendGitignore(gitignoreEntries("myapp", "vault")); err != nil {
+		t.Fatal(err)
+	}
+
+	ignored := []string{
+		"myapp/secrets/db.yaml",
+		"myapp/secrets/db/password.yaml",
+		"myapp/secrets/a/b/c/deep.json",
+		"myapp/secrets/api.yml",
+		"myapp/.penhan/keys/aes.key",
+		"myapp/.penhan/vault-token",
+	}
+	tracked := []string{
+		"myapp/secrets/db.yaml.enc",
+		"myapp/secrets/db/password.yaml.enc",
+		"myapp/penhan.yaml",
+	}
+	for _, p := range ignored {
+		if err := exec.Command("git", "check-ignore", "-q", p).Run(); err != nil {
+			t.Errorf("%s must be ignored by git", p)
+		}
+	}
+	for _, p := range tracked {
+		if err := exec.Command("git", "check-ignore", "-q", p).Run(); err == nil {
+			t.Errorf("%s must not be ignored by git", p)
+		}
 	}
 }

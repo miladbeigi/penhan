@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `penhan import [name...] [--all]` (kubernetes backend) takes over Secrets that already exist in the namespace. With no arguments it lists each Secret as `ready`, `present`, or `skip` with a reason. Imported Secrets are written straight to encrypted `secrets/<name>.yaml.enc` files and marked as managed by the safe; their data is not changed. Secrets managed by Helm, Argo CD, other tools, or other safes, non-`Opaque` types, and binary values are never imported.
+
+### Fixed
+
+- Secret values were silently changed by YAML/JSON type conversion before being pushed: `pin: 0012` was pushed as `10`, `0x1F` as `31`, `1.10` as `1.1`, an empty value as `<nil>`, dates as `2026-01-02 00:00:00 +0000 UTC`, and large JSON numbers in exponent form. Values are now pushed exactly as written, and duplicate keys are rejected.
+- The `.gitignore` entries `add` writes did not match nested secrets: `myapp/secrets/*.yaml` ignored `secrets/db.yaml` but not `secrets/db/password.yaml`, so nested plaintext secrets could be committed. Entries are now `myapp/secrets/**/*.yaml` (and `.yml`, `.json`). **Existing safes keep the old entries:** in your `.gitignore`, replace `<safe>/secrets/*.` with `<safe>/secrets/**/*.`.
+
+### Added
+
 - Kubernetes backend (`--backend=kubernetes`): each secret file is pushed as an `Opaque` Secret in the safe's namespace (`db/password.yaml` → Secret `db-password`), readable by workloads as usual. New `add` flags: `--kube-namespace` (required), `--kube-context`, `--kubeconfig`.
   - `add` pins the kubeconfig context in `penhan.yaml`, so switching `kubectl` contexts later can't redirect a push to another cluster.
   - Secrets are labeled `app.kubernetes.io/managed-by: penhan` and annotated with their safe and source path. penhan refuses to overwrite Secrets it didn't create, Secrets owned by another safe, and two paths that map to the same name.

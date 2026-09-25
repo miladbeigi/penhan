@@ -29,6 +29,14 @@ type fakeSecrets struct {
 	api corev1client.SecretInterface
 }
 
+func (f fakeSecrets) List(ctx context.Context) ([]corev1.Secret, error) {
+	list, err := f.api.List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
+}
+
 func (f fakeSecrets) Get(ctx context.Context, name string) (*corev1.Secret, error) {
 	return f.api.Get(ctx, name, metav1.GetOptions{})
 }
@@ -244,3 +252,138 @@ users:
   user:
     token: test
 `
+
+func importFixture(name string, mutate func(*corev1.Secret)) *corev1.Secret {
+	s := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "apps"},
+		Type:       corev1.SecretTypeOpaque,
+		Data:       map[string][]byte{"k": []byte("v")},
+	}
+	if mutate != nil {
+		mutate(s)
+	}
+	return s
+}
+
+func TestKubernetesImportCandidates(t *testing.T) {
+	isController := true
+	p, _ := newTestKubernetes(t,
+		importFixture("plain", nil),
+		importFixture("pull", func(s *corev1.Secret) { s.Type = corev1.SecretTypeDockerConfigJson }),
+		importFixture("helm", func(s *corev1.Secret) {
+			s.Annotations = map[string]string{"meta.helm.sh/release-name": "karakeep"}
+		}),
+		importFixture("argo", func(s *corev1.Secret) {
+			s.Labels = map[string]string{"argocd.argoproj.io/secret-type": "repository"}
+		}),
+		importFixture("owned", func(s *corev1.Secret) {
+			s.OwnerReferences = []metav1.OwnerReference{{Kind: "Node", Name: "n1", Controller: &isController}}
+		}),
+		importFixture("other-tool", func(s *corev1.Secret) {
+			s.Labels = map[string]string{managedByLabel: "sealed-secrets"}
+		}),
+		importFixture("other-safe", func(s *corev1.Secret) {
+			s.Labels = map[string]string{managedByLabel: managedByValue}
+			s.Annotations = map[string]string{safeAnnotation: "beta", pathAnnotation: "other-safe"}
+		}),
+		importFixture("mine", func(s *corev1.Secret) {
+			s.Labels = map[string]string{managedByLabel: managedByValue}
+			s.Annotations = map[string]string{safeAnnotation: "myapp", pathAnnotation: "mine"}
+		}),
+		importFixture("binary", func(s *corev1.Secret) { s.Data["bin"] = []byte{0xff, 0xfe} }),
+	)
+
+	got, err := p.ImportCandidates()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"argo":       "Argo CD",
+		"binary":     "binary data",
+		"helm":       "Helm release karakeep",
+		"mine":       "",
+		"other-safe": `safe "beta"`,
+		"other-tool": "sealed-secrets",
+		"owned":      "owned by Node n1",
+		"plain":      "",
+		"pull":       "not supported",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d candidates, want %d: %+v", len(got), len(want), got)
+	}
+	for i, c := range got {
+		if i > 0 && got[i-1].Name > c.Name {
+			t.Errorf("candidates not sorted: %s before %s", got[i-1].Name, c.Name)
+		}
+		w := want[c.Name]
+		if (w == "") != (c.Reason == "") || !strings.Contains(c.Reason, w) {
+			t.Errorf("%s: reason = %q, want %q", c.Name, c.Reason, w)
+		}
+	}
+}
+
+func TestKubernetesImportAdoptsWithoutChangingData(t *testing.T) {
+	fixture := importFixture("tunnel", func(s *corev1.Secret) {
+		s.Labels = map[string]string{"app": "cloudflared"}
+		s.Data = map[string][]byte{"credentials.json": []byte(`{"a":"b"}`), "token": []byte("0012")}
+	})
+	p, client := newTestKubernetes(t, fixture)
+
+	path, content, err := p.ReadForImport("tunnel")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != "tunnel" || string(content) != `{"credentials.json":"{\"a\":\"b\"}","token":"0012"}` {
+		t.Fatalf("ReadForImport() = %q, %s", path, content)
+	}
+	if err := p.Adopt(path, content); err != nil {
+		t.Fatalf("Adopt() error = %v", err)
+	}
+
+	s := getSecret(t, client, "tunnel")
+	if string(s.Data["token"]) != "0012" || len(s.Data) != 2 {
+		t.Errorf("data changed: %v", s.Data)
+	}
+	if s.Labels["app"] != "cloudflared" || s.Labels[managedByLabel] != managedByValue {
+		t.Errorf("labels = %v", s.Labels)
+	}
+	if s.Annotations[safeAnnotation] != "myapp" || s.Annotations[pathAnnotation] != "tunnel" {
+		t.Errorf("annotations = %v", s.Annotations)
+	}
+
+	// Once adopted, it is an ordinary managed secret.
+	if got, err := p.Pull("tunnel"); err != nil || string(got) != string(content) {
+		t.Errorf("Pull() after adopt = %s, %v", got, err)
+	}
+}
+
+func TestKubernetesAdoptRefusesChangedData(t *testing.T) {
+	p, client := newTestKubernetes(t, importFixture("db", nil))
+	path, content, err := p.ReadForImport("db")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s := getSecret(t, client, "db")
+	s.Data["k"] = []byte("changed-in-cluster")
+	if _, err := client.CoreV1().Secrets("apps").Update(context.Background(), s, metav1.UpdateOptions{}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := p.Adopt(path, content); err == nil || !strings.Contains(err.Error(), "changed during import") {
+		t.Fatalf("Adopt() error = %v, want changed during import", err)
+	}
+	if getSecret(t, client, "db").Labels[managedByLabel] == managedByValue {
+		t.Error("a Secret that changed during import must not be adopted")
+	}
+}
+
+func TestKubernetesReadForImportRefusesBlocked(t *testing.T) {
+	p, _ := newTestKubernetes(t, importFixture("pull", func(s *corev1.Secret) { s.Type = corev1.SecretTypeDockerConfigJson }))
+	if _, _, err := p.ReadForImport("pull"); err == nil || !strings.Contains(err.Error(), "not supported") {
+		t.Errorf("ReadForImport() error = %v", err)
+	}
+	if _, _, err := p.ReadForImport("missing"); err == nil || !strings.Contains(err.Error(), "does not exist") {
+		t.Errorf("ReadForImport(missing) error = %v", err)
+	}
+}

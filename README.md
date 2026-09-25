@@ -15,7 +15,7 @@ Penhan keeps secrets as encrypted files in Git and pushes them to a secret backe
 - **Safes** — each safe is a directory with its own config, key, and backend base path
 - **Hash-based sync** — `check` compares local files with the backend; `push` writes only what changed
 - **Directory mapping** — the folder structure under `secrets/` maps to backend paths automatically
-- **Six commands** — nothing to learn beyond add, check, push, encrypt, decrypt, version
+- **Seven commands** — add, check, push, encrypt, decrypt, import, version
 
 ## Backends
 
@@ -101,6 +101,7 @@ penhan push
 | `penhan push` | Push secrets whose hash differs from the backend; skip the rest. Prints every secret |
 | `penhan encrypt [file\|dir]` | Encrypt secret files in place (defaults to the secrets directory) |
 | `penhan decrypt [file\|dir]` | Decrypt secret files in place (defaults to the secrets directory). Refuses to overwrite a plaintext file with different content |
+| `penhan import [name...]` | Take over Secrets that already exist in the namespace (kubernetes backend). With no arguments, lists what can be imported |
 | `penhan version` | Print version information |
 
 All commands except `add` and `version` run inside a safe directory.
@@ -152,7 +153,18 @@ Guardrails:
 - **Names are validated, not rewritten.** Secret names must be lowercase DNS names (`a-z`, `0-9`, `-`, `.`). A file like `secrets/DB_Password.yaml` is rejected with an error, not silently renamed, because renaming could merge two files into one Secret.
 - **Pushes replace data.** A key removed from the local file is removed from the Secret. Labels and annotations added by other tools are kept.
 
-penhan needs `get`, `create`, and `update` on `secrets` in the namespace. The namespace must already exist. No credentials are stored in the safe: penhan uses your kubeconfig (`--kubeconfig`, `$KUBECONFIG`, or `~/.kube/config`).
+#### Importing existing Secrets
+
+To bring Secrets you created by hand under penhan, run `penhan import` inside the safe. With no arguments it only lists: each Secret in the namespace is shown as `ready`, `present` (already in the safe), or `skip` with the reason. Then import by name, or everything ready with `--all`:
+
+```bash
+penhan import                 # read-only: what can be imported, and why not
+penhan import api-key db      # or: penhan import --all
+```
+
+Each imported Secret is written straight to `secrets/<name>.yaml.enc`, encrypted, so the plaintext never touches disk. The Secret gets the penhan label and annotations; its data, type, and other labels are unchanged, so nothing that mounts it restarts. penhan re-reads the data just before marking the Secret and refuses if it changed during the import. It never imports non-`Opaque` Secrets (e.g. `kubernetes.io/dockerconfigjson` image pull secrets), Secrets managed by Helm, Argo CD, or another tool, Secrets with an owner reference, or Secrets holding binary values.
+
+penhan needs `get`, `list`, `create`, and `update` on `secrets` in the namespace. The namespace must already exist. No credentials are stored in the safe: penhan uses your kubeconfig (`--kubeconfig`, `$KUBECONFIG`, or `~/.kube/config`).
 
 ### Encryption
 
@@ -163,7 +175,7 @@ Penhan supports two encryption methods. Both generate their key locally when the
 
 Back up the key file and share it with teammates out of band: anyone who clones the repository needs it to decrypt the `.enc` files, and losing it means losing access to them. Only `penhan add` creates keys. Every other command fails with `encryption key not found` when the key is missing, rather than generating a new one that would not match the existing files.
 
-Secret files are flat YAML or JSON key-value pairs (`.yaml`, `.yml`, or `.json`); nested maps or lists are rejected. `check` and `push` read both plaintext and `.enc` files; when both exist for the same secret, the plaintext wins.
+Secret files are flat YAML or JSON key-value pairs (`.yaml`, `.yml`, or `.json`); nested maps or lists are rejected. Values are pushed exactly as written: `pin: 0012` stays `0012`, and an empty value is an empty string. `check` and `push` read both plaintext and `.enc` files; when both exist for the same secret, the plaintext wins.
 
 ### Check and Push
 
