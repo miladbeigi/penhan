@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- `penhan update` updates penhan in place to the latest GitHub release. It verifies the archive against the release's `checksums.txt` and runs the new binary once before atomically replacing the old one. `--check` only reports. It uses github.com release URLs rather than the REST API, which caps unauthenticated clients at 60 requests per hour per IP. Versions up to 0.5.1 don't have this command; install the next release manually once.
+- In an interactive terminal, penhan checks for a new release at most once a day and prints a notice on stderr. It never installs anything by itself, and it's off in scripts, in CI, and with `PENHAN_NO_UPDATE_NOTIFIER=1`.
+
+### Changed
+
+- `penhan decrypt` now keeps the `.enc` file next to the plaintext. `penhan encrypt` keeps an existing `.enc` byte for byte when it already decrypts to the plaintext. Because encryption is randomized, a decrypt/encrypt cycle without edits used to rewrite every `.enc` file and show a diff in git; now only secrets that actually changed are rewritten.
+
+### Added
+
 - Kubernetes backend (`--backend=kubernetes`): each secret file is pushed as an `Opaque` Secret in the safe's namespace (`db/password.yaml` → Secret `db-password`), readable by workloads as usual. New `add` flags: `--kube-namespace` (required), `--kube-context`, `--kubeconfig`.
   - `add` pins the kubeconfig context in `penhan.yaml`, so switching `kubectl` contexts later can't redirect a push to another cluster.
   - Secrets are labeled `app.kubernetes.io/managed-by: penhan` and annotated with their safe and source path. penhan refuses to overwrite Secrets it didn't create, Secrets owned by another safe, and two paths that map to the same name.

@@ -15,7 +15,7 @@ Penhan keeps secrets as encrypted files in Git and pushes them to a secret backe
 - **Safes** — each safe is a directory with its own config, key, and backend base path
 - **Hash-based sync** — `check` compares local files with the backend; `push` writes only what changed
 - **Directory mapping** — the folder structure under `secrets/` maps to backend paths automatically
-- **Six commands** — nothing to learn beyond add, check, push, encrypt, decrypt, version
+- **Few commands** — add, check, push, encrypt, decrypt, update, version
 
 ## Backends
 
@@ -53,6 +53,17 @@ Requires Go 1.26+:
 ```bash
 go install github.com/miladbeigi/penhan/cmd/penhan@latest
 ```
+
+### Updating
+
+```bash
+penhan update           # download, verify, and install the latest release
+penhan update --check   # only report whether a newer release exists
+```
+
+`update` downloads the release archive for your OS and architecture, verifies it against the release's `checksums.txt`, runs the new binary once to make sure it works, and then atomically replaces the installed one. If penhan lives in a directory you can't write to (e.g. `/usr/local/bin`), run it with `sudo`.
+
+When you use penhan in a terminal, it checks for a new release at most once a day and prints a one-line notice on stderr. It never installs anything by itself. The check is skipped in scripts and CI (when stderr isn't a terminal or `CI` is set); set `PENHAN_NO_UPDATE_NOTIFIER=1` to turn it off entirely.
 
 ### Build from Source
 
@@ -100,7 +111,8 @@ penhan push
 | `penhan check` | Compare local secrets with the backend and report `new`, `changed`, or `unchanged`. Never writes |
 | `penhan push` | Push secrets whose hash differs from the backend; skip the rest. Prints every secret |
 | `penhan encrypt [file\|dir]` | Encrypt secret files in place (defaults to the secrets directory) |
-| `penhan decrypt [file\|dir]` | Decrypt secret files in place (defaults to the secrets directory). Refuses to overwrite a plaintext file with different content |
+| `penhan decrypt [file\|dir]` | Write the plaintext next to each `.enc` file for editing (defaults to the secrets directory). Refuses to overwrite a plaintext file with different content |
+| `penhan update` | Update penhan to the latest release (`--check` to only look) |
 | `penhan version` | Print version information |
 
 All commands except `add` and `version` run inside a safe directory.
@@ -162,6 +174,8 @@ Penhan supports two encryption methods. Both generate their key locally when the
 - **`aes`** — symmetric AES-256-GCM with a random 256-bit key
 
 Back up the key file and share it with teammates out of band: anyone who clones the repository needs it to decrypt the `.enc` files, and losing it means losing access to them. Only `penhan add` creates keys. Every other command fails with `encryption key not found` when the key is missing, rather than generating a new one that would not match the existing files.
+
+Encryption is randomized (a fresh nonce for AES, a fresh session key for GPG), so encrypting the same plaintext twice gives different bytes; this keeps an observer of the git history from telling when two secrets are equal. To keep git diffs meaningful anyway, `decrypt` leaves the `.enc` file in place and `encrypt` keeps it byte for byte when it already decrypts to the plaintext. A decrypt/encrypt cycle without edits changes nothing in git.
 
 Secret files are flat YAML or JSON key-value pairs (`.yaml`, `.yml`, or `.json`); nested maps or lists are rejected. `check` and `push` read both plaintext and `.enc` files; when both exist for the same secret, the plaintext wins.
 
