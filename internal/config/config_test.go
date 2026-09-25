@@ -56,7 +56,7 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 		Encryption: EncryptionConfig{
 			Method: "gpg",
 			GPG: GPGConfig{
-				KeyID: "ABC123",
+				KeyPath: ".penhan/keys/gpg.key",
 			},
 		},
 		Backend: BackendConfig{
@@ -84,5 +84,8 @@ func TestSaveLoadRoundtrip(t *testing.T) {
 
 	if loaded.Encryption.Method != original.Encryption.Method {
 		t.Errorf("Method = %q, want %q", loaded.Encryption.Method, original.Encryption.Method)
+	}
+	if got := loaded.Encryption.KeyPath(); got != ".penhan/keys/gpg.key" {
+		t.Errorf("KeyPath() = %q, want the gpg key path", got)
 	}
 }

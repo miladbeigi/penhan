@@ -5,18 +5,24 @@ import (
 	"strings"
 )
 
-// LocalToVault converts a local file path to a Vault secret path.
-// Example: "secrets/db/password.yaml" with secretsDir "secrets/" → "db/password"
-func LocalToVault(localPath, secretsDir string) string {
-	relative := strings.TrimPrefix(localPath, secretsDir)
-	relative = strings.TrimPrefix(relative, "/")
-
-	ext := filepath.Ext(relative)
-	return strings.TrimSuffix(relative, ext)
+// IsSecretFile reports whether name (after stripping any .enc suffix) has
+// an extension penhan reads as a secret: .yaml, .yml, or .json.
+func IsSecretFile(name string) bool {
+	switch filepath.Ext(strings.TrimSuffix(name, ".enc")) {
+	case ".yaml", ".yml", ".json":
+		return true
+	}
+	return false
 }
 
-// VaultToLocal converts a Vault secret path to a local file path.
-// Example: "db/password" with secretsDir "secrets/" and format "yaml" → "secrets/db/password.yaml"
-func VaultToLocal(vaultPath, secretsDir, format string) string {
-	return filepath.Join(secretsDir, vaultPath+"."+format)
+// RemotePath converts a local secret file path to its backend path: the
+// path relative to secretsDir, slash-separated, without extension.
+// Example: "secrets/db/password.yaml" with secretsDir "secrets/" → "db/password"
+func RemotePath(localPath, secretsDir string) string {
+	rel, err := filepath.Rel(secretsDir, localPath)
+	if err != nil {
+		rel = localPath
+	}
+	rel = filepath.ToSlash(rel)
+	return strings.TrimSuffix(rel, filepath.Ext(rel))
 }

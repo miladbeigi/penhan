@@ -30,27 +30,30 @@ go test -tags=integration ./integration/...
 
 ## E2E Tests
 
-E2E tests run the real penhan binary against a real Vault server. Each
-scenario starts its own throwaway Vault container (via testcontainers-go,
-random port) and destroys it afterwards — no Makefile orchestration, no
-leftover state:
+E2E tests run the real penhan binary against a real Vault server and a real
+Kubernetes API server (k3s). Each Vault scenario starts its own throwaway
+Vault container; the Kubernetes scenarios share one k3s container per test
+(it takes ~20s to boot) and isolate themselves by namespace. Everything runs
+via testcontainers-go on random ports and is destroyed afterwards — no
+Makefile orchestration, no leftover state:
 
 ```bash
 make test-e2e             # Requires Docker
 go test -tags=e2e -run TestFullJourney ./e2e/...  # Single scenario
+go test -tags=e2e -run TestKubernetesBackend ./e2e/...  # Kubernetes scenarios
 ```
 
 ## Project Structure
 
 ```
 cmd/penhan/          # CLI entrypoint (Cobra)
-e2e/                 # E2E tests (real CLI against real Vault, build tag: e2e)
+e2e/                 # E2E tests (real CLI against real Vault and k3s, build tag: e2e)
 integration/         # Integration tests (real CLI against compose Vault, build tag: integration)
 internal/
-  backends/          # Backend providers: Vault KV v2, encrypted file
+  backends/          # Backend providers: Vault KV v2, Kubernetes Secrets, encrypted file
   commands/          # CLI commands: add, check, push, encrypt, decrypt, version
   config/            # YAML config parsing
-  crypto/            # GPG / GitHub GPG / AES encryption providers
+  crypto/            # GPG / AES encryption providers
   prompt/            # TUI prompts (charmbracelet/huh)
   secrets/           # YAML/JSON parsing and path mapping
 ```

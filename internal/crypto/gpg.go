@@ -4,73 +4,42 @@ import (
 	"bytes"
 	"crypto"
 	"fmt"
-	"os"
+	"io"
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
 	"github.com/ProtonMail/go-crypto/openpgp/packet"
 )
 
+var gpgConfig = &packet.Config{DefaultHash: crypto.SHA256}
+
+// GPGProvider encrypts to an OpenPGP keypair generated for the safe and
+// writes ASCII-armored messages.
 type GPGProvider struct {
 	entity *openpgp.Entity
 }
 
-func NewGPGProvider() *GPGProvider {
-	return &GPGProvider{}
+func generateGPGKey() ([]byte, error) {
+	entity, err := openpgp.NewEntity("penhan", "", "penhan@secret", gpgConfig)
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := entity.SerializePrivate(&buf, nil); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
-func (p *GPGProvider) Setup(keyPath, passphrase string) error {
-	cfg := &packet.Config{DefaultHash: crypto.SHA256}
-
-	if _, err := os.Stat(keyPath); os.IsNotExist(err) {
-		entity, err := openpgp.NewEntity("penhan", "", "penhan@secret", cfg)
-		if err != nil {
-			return err
-		}
-		p.entity = entity
-
-		f, err := os.Create(keyPath)
-		if err != nil {
-			return err
-		}
-		defer func() {
-			if cerr := f.Close(); cerr != nil && err == nil {
-				err = cerr
-			}
-		}()
-
-		return entity.SerializePrivate(f, nil)
-	}
-
-	f, err := os.Open(keyPath)
+func newGPG(key []byte) (*GPGProvider, error) {
+	entities, err := openpgp.ReadKeyRing(bytes.NewReader(key))
 	if err != nil {
-		return err
+		return nil, fmt.Errorf("parse gpg key: %w", err)
 	}
-	defer func() {
-		if cerr := f.Close(); cerr != nil && err == nil {
-			err = cerr
-		}
-	}()
-
-	entities, err := openpgp.ReadKeyRing(f)
-	if err != nil {
-		return err
-	}
-
 	if len(entities) == 0 {
-		return fmt.Errorf("no keys found in key file")
+		return nil, fmt.Errorf("no keys found in gpg key file")
 	}
-
-	p.entity = entities[0]
-	return nil
-}
-
-func (p *GPGProvider) IsInitialized() bool {
-	return p.entity != nil
-}
-
-func (p *GPGProvider) SealOnly() bool {
-	return false
+	return &GPGProvider{entity: entities[0]}, nil
 }
 
 func (p *GPGProvider) Encrypt(plaintext []byte) ([]byte, error) {
@@ -80,19 +49,16 @@ func (p *GPGProvider) Encrypt(plaintext []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	encrypter, err := openpgp.Encrypt(w, []*openpgp.Entity{p.entity}, nil, nil, &packet.Config{DefaultHash: crypto.SHA256})
+	encrypter, err := openpgp.Encrypt(w, []*openpgp.Entity{p.entity}, nil, nil, gpgConfig)
 	if err != nil {
 		return nil, err
 	}
-
 	if _, err := encrypter.Write(plaintext); err != nil {
 		return nil, err
 	}
-
 	if err := encrypter.Close(); err != nil {
 		return nil, err
 	}
-
 	if err := w.Close(); err != nil {
 		return nil, err
 	}
@@ -103,18 +69,13 @@ func (p *GPGProvider) Encrypt(plaintext []byte) ([]byte, error) {
 func (p *GPGProvider) Decrypt(ciphertext []byte) ([]byte, error) {
 	block, err := armor.Decode(bytes.NewReader(ciphertext))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gpg decrypt: %w", err)
 	}
 
-	entity, err := openpgp.ReadMessage(block.Body, openpgp.EntityList{p.entity}, nil, nil)
+	msg, err := openpgp.ReadMessage(block.Body, openpgp.EntityList{p.entity}, nil, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("gpg decrypt (wrong key?): %w", err)
 	}
 
-	buf := new(bytes.Buffer)
-	if _, err := buf.ReadFrom(entity.UnverifiedBody); err != nil {
-		return nil, err
-	}
-
-	return buf.Bytes(), nil
+	return io.ReadAll(msg.UnverifiedBody)
 }

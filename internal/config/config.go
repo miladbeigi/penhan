@@ -19,20 +19,26 @@ type EncryptionConfig struct {
 }
 
 type GPGConfig struct {
-	KeyID          string `yaml:"key_id,omitempty"`
-	KeyPath        string `yaml:"key_path,omitempty"`
-	GitHubUsername string `yaml:"github_username,omitempty"`
+	KeyPath string `yaml:"key_path,omitempty"`
 }
 
 type AESConfig struct {
-	KeyPath       string `yaml:"key_path,omitempty"`
-	KeyDerivation string `yaml:"key_derivation,omitempty"`
+	KeyPath string `yaml:"key_path,omitempty"`
+}
+
+// KeyPath returns the key file path configured for the selected method.
+func (e EncryptionConfig) KeyPath() string {
+	if e.Method == "gpg" {
+		return e.GPG.KeyPath
+	}
+	return e.AES.KeyPath
 }
 
 type BackendConfig struct {
-	Type  string      `yaml:"type"`
-	Vault VaultConfig `yaml:"vault,omitempty"`
-	File  FileConfig  `yaml:"file,omitempty"`
+	Type       string           `yaml:"type"`
+	Vault      VaultConfig      `yaml:"vault,omitempty"`
+	File       FileConfig       `yaml:"file,omitempty"`
+	Kubernetes KubernetesConfig `yaml:"kubernetes,omitempty"`
 }
 
 type VaultConfig struct {
@@ -44,6 +50,13 @@ type VaultConfig struct {
 
 type FileConfig struct {
 	Path string `yaml:"path"`
+}
+
+type KubernetesConfig struct {
+	Kubeconfig string `yaml:"kubeconfig,omitempty"` // empty: $KUBECONFIG or ~/.kube/config
+	Context    string `yaml:"context"`
+	Namespace  string `yaml:"namespace"`
+	Safe       string `yaml:"safe"` // recorded on each Secret to mark ownership
 }
 
 type SecretsConfig struct {

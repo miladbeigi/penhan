@@ -2,10 +2,11 @@ version: "2"
 
 run:
   timeout: 5m
-  # Also lint files behind the `integration` build tag, otherwise
-  # integration/*_test.go is never checked.
+  # Also lint files behind the `integration` and `e2e` build tags, otherwise
+  # integration/*_test.go and e2e/*_test.go are never checked.
   build-tags:
     - integration
+    - e2e
 
 linters:
   enable:

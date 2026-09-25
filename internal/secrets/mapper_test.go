@@ -4,63 +4,45 @@ import (
 	"testing"
 )
 
-func TestLocalToVault(t *testing.T) {
+func TestRemotePath(t *testing.T) {
 	tests := []struct {
-		name      string
-		localPath string
-		want      string
+		name       string
+		localPath  string
+		secretsDir string
+		want       string
 	}{
-		{
-			name:      "simple path",
-			localPath: "secrets/db/password.yaml",
-			want:      "db/password",
-		},
-		{
-			name:      "nested path",
-			localPath: "secrets/api/v1/keys.yaml",
-			want:      "api/v1/keys",
-		},
-		{
-			name:      "json file",
-			localPath: "secrets/prod/cert.json",
-			want:      "prod/cert",
-		},
+		{"simple path", "secrets/db/password.yaml", "secrets/", "db/password"},
+		{"nested path", "secrets/api/v1/keys.yaml", "secrets/", "api/v1/keys"},
+		{"json file", "secrets/prod/cert.json", "secrets/", "prod/cert"},
+		{"no trailing slash", "secrets/db.yaml", "secrets", "db"},
+		// filepath.Walk yields cleaned paths, so "./secrets" must still match.
+		{"dot-prefixed dir", "secrets/db.yaml", "./secrets", "db"},
+		{"dot in name", "secrets/db.prod.yaml", "secrets/", "db.prod"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := LocalToVault(tt.localPath, "secrets/")
-			if got != tt.want {
-				t.Errorf("LocalToVault() = %q, want %q", got, tt.want)
+			if got := RemotePath(tt.localPath, tt.secretsDir); got != tt.want {
+				t.Errorf("RemotePath(%q, %q) = %q, want %q", tt.localPath, tt.secretsDir, got, tt.want)
 			}
 		})
 	}
 }
 
-func TestVaultToLocal(t *testing.T) {
-	tests := []struct {
-		name      string
-		vaultPath string
-		want      string
-	}{
-		{
-			name:      "simple path",
-			vaultPath: "db/password",
-			want:      "secrets/db/password.yaml",
-		},
-		{
-			name:      "nested path",
-			vaultPath: "api/v1/keys",
-			want:      "secrets/api/v1/keys.yaml",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := VaultToLocal(tt.vaultPath, "secrets/", "yaml")
-			if got != tt.want {
-				t.Errorf("VaultToLocal() = %q, want %q", got, tt.want)
-			}
-		})
+func TestIsSecretFile(t *testing.T) {
+	for name, want := range map[string]bool{
+		"db.yaml":      true,
+		"db.yml":       true,
+		"db.json":      true,
+		"db.yaml.enc":  true,
+		"db.json.enc":  true,
+		".gitkeep":     false,
+		"README.md":    false,
+		"db.enc":       false,
+		"db.yaml.orig": false,
+	} {
+		if got := IsSecretFile(name); got != want {
+			t.Errorf("IsSecretFile(%q) = %v, want %v", name, got, want)
+		}
 	}
 }

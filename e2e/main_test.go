@@ -177,7 +177,7 @@ func writeTokenFile(t *testing.T, dir string, v vaultEnv) string {
 func addSafe(t *testing.T, dir, name string, v vaultEnv) string {
 	t.Helper()
 	tokenFile := writeTokenFile(t, dir, v)
-	stdout, stderr, code := run(t, dir, "", "add", name,
+	stdout, stderr, code := run(t, dir, "add", name,
 		"--encryption=aes",
 		"--backend=vault",
 		"--vault-addr="+v.addr,
@@ -187,16 +187,16 @@ func addSafe(t *testing.T, dir, name string, v vaultEnv) string {
 	return filepath.Join(dir, name)
 }
 
-// run executes the penhan binary in dir with the given stdin and returns
-// stdout, stderr, and the exit code. Stdin is always a pipe, so every
-// command runs in the same deterministic non-TTY mode a script would get.
-func run(t *testing.T, dir string, stdin string, args ...string) (string, string, int) {
+// run executes the penhan binary in dir and returns stdout, stderr, and the
+// exit code. Stdin is always an empty pipe, so every command runs in the same
+// deterministic non-TTY mode a script would get.
+func run(t *testing.T, dir string, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, penhanBinary, args...)
 	cmd.Dir = dir
-	cmd.Stdin = strings.NewReader(stdin)
+	cmd.Stdin = strings.NewReader("")
 	var outBuf, errBuf safeBuffer
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf

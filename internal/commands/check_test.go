@@ -2,10 +2,8 @@ package commands
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/miladbeigi/penhan/internal/backends"
@@ -35,11 +33,6 @@ func (f *fakeBackend) Pull(path string) ([]byte, error) {
 	return c, nil
 }
 
-func (f *fakeBackend) List(string) ([]string, error)     { return nil, nil }
-func (f *fakeBackend) Delete(path string) error          { delete(f.store, path); return nil }
-func (f *fakeBackend) Setup(backends.SetupOptions) error { return nil }
-func (f *fakeBackend) IsInitialized() bool               { return true }
-
 // newTestSafe creates a safe on disk with an AES key, chdirs into it, and
 // returns its config plus provider.
 func newTestSafe(t *testing.T) (*config.Config, crypto.Provider) {
@@ -61,7 +54,10 @@ func newTestSafe(t *testing.T) (*config.Config, crypto.Provider) {
 		Encryption: config.EncryptionConfig{Method: "aes", AES: config.AESConfig{KeyPath: ".penhan/keys/aes.key"}},
 		Secrets:    config.SecretsConfig{Path: "secrets/", Format: "yaml"},
 	}
-	provider, err := newCryptoProvider(cfg)
+	if err := crypto.Generate("aes", cfg.Encryption.KeyPath()); err != nil {
+		t.Fatal(err)
+	}
+	provider, err := loadCryptoProvider(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,84 +166,6 @@ type failingBackend struct{ fakeBackend }
 
 func (f *failingBackend) Pull(string) ([]byte, error) {
 	return nil, fmt.Errorf("connection refused")
-}
-
-type fakeSealOnlyProvider struct{}
-
-func (f *fakeSealOnlyProvider) Encrypt(plaintext []byte) ([]byte, error) { return plaintext, nil }
-func (f *fakeSealOnlyProvider) Decrypt(ciphertext []byte) ([]byte, error) {
-	return nil, fmt.Errorf("seal-only")
-}
-func (f *fakeSealOnlyProvider) Setup(string, string) error { return nil }
-func (f *fakeSealOnlyProvider) IsInitialized() bool        { return true }
-func (f *fakeSealOnlyProvider) SealOnly() bool             { return true }
-
-func captureStderr(t *testing.T, fn func()) string {
-	t.Helper()
-	old := os.Stderr
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	os.Stderr = w
-	t.Cleanup(func() { os.Stderr = old })
-
-	fn()
-
-	if err := w.Close(); err != nil {
-		t.Fatal(err)
-	}
-	out, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(out)
-}
-
-func TestCollectLocalSecretsSkipsEncryptedOnlyForSealOnlyProvider(t *testing.T) {
-	cfg, _ := newTestSafe(t)
-	writeSecretFile(t, "db.yaml.enc", "encrypted")
-
-	var got []localSecret
-	out := captureStderr(t, func() {
-		var err error
-		got, err = collectLocalSecrets(cfg, &fakeSealOnlyProvider{})
-		if err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	if len(got) != 0 {
-		t.Fatalf("expected no secrets, got %d", len(got))
-	}
-	if !strings.Contains(out, "  Skipping db (encrypted, no plaintext available for seal-only provider)") {
-		t.Fatalf("missing skip warning, got %q", out)
-	}
-}
-
-func TestCollectLocalSecretsPrefersPlaintextForSealOnlyProvider(t *testing.T) {
-	cfg, _ := newTestSafe(t)
-	writeSecretFile(t, "db.yaml", "k: v\n")
-	writeSecretFile(t, "db.yaml.enc", "encrypted")
-
-	var got []localSecret
-	out := captureStderr(t, func() {
-		var err error
-		got, err = collectLocalSecrets(cfg, &fakeSealOnlyProvider{})
-		if err != nil {
-			t.Fatal(err)
-		}
-	})
-
-	if len(got) != 1 {
-		t.Fatalf("expected 1 secret, got %d", len(got))
-	}
-	if got[0].Path != "db" {
-		t.Fatalf("got path %q, want %q", got[0].Path, "db")
-	}
-	if out != "" {
-		t.Fatalf("expected no warnings, got %q", out)
-	}
 }
 
 func TestCommandSet(t *testing.T) {

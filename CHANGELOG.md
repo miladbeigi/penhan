@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- Kubernetes backend (`--backend=kubernetes`): each secret file is pushed as an `Opaque` Secret in the safe's namespace (`db/password.yaml` → Secret `db-password`), readable by workloads as usual. New `add` flags: `--kube-namespace` (required), `--kube-context`, `--kubeconfig`.
+  - `add` pins the kubeconfig context in `penhan.yaml`, so switching `kubectl` contexts later can't redirect a push to another cluster.
+  - Secrets are labeled `app.kubernetes.io/managed-by: penhan` and annotated with their safe and source path. penhan refuses to overwrite Secrets it didn't create, Secrets owned by another safe, and two paths that map to the same name.
+  - Secret paths that aren't valid Kubernetes names are rejected with an error instead of being silently renamed.
+
+### Changed
+
+- Only `penhan add` creates encryption keys. `encrypt`, `decrypt`, `check`, and `push` now fail with `encryption key not found at …` when the key is missing. Previously they silently generated a new key, so in a fresh clone without the key, `encrypt` would encrypt new files with a key that didn't match the rest of the safe.
+- `penhan decrypt` refuses to overwrite a plaintext file whose content differs from the encrypted copy, so local edits are never silently lost.
+- `penhan encrypt` on a directory only encrypts secret files (`.yaml`, `.yml`, `.json`) and leaves others (e.g. `.gitkeep`) alone.
+
+### Fixed
+
+- GPG private keys were created with mode 0644 (world-readable under a typical umask). New keys are written 0600, and `add` refuses to overwrite an existing key.
+- Decrypted plaintext files were written with mode 0644. They're now written 0600.
+- Backend paths were wrong when `secrets.path` wasn't in cleaned form (e.g. `./secrets`): `secrets/db.yaml` was mapped to `secrets/db` instead of `db`.
+
+### Removed
+
+- The `github-gpg` encryption method and the `--github-username` flag. Keys are now always generated locally (`gpg` or `aes`), which removes the network fetch, key caching, and seal-only code paths. A safe still configured with `github-gpg` fails with a message explaining how to migrate: decrypt its `.enc` files with `gpg --decrypt` and recreate the safe with `gpg` or `aes`.
+- The AES passphrase mode, which the CLI never exposed, and the unused `key_id` and `key_derivation` config fields.
+
 ## [0.5.1] - 2026-09-04
 
 ### Changed

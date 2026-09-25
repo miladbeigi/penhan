@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/miladbeigi/penhan/internal/crypto"
+	"github.com/miladbeigi/penhan/internal/config"
 	"github.com/miladbeigi/penhan/internal/prompt"
 )
 
@@ -277,7 +277,7 @@ func TestGitignoreEntries_FileBackendHasNoToken(t *testing.T) {
 	}
 }
 
-func TestCreateSafe_GitHubGPGSetupFailureRollsBackNewDirectory(t *testing.T) {
+func TestCreateSafe_KeySetupFailureRollsBackNewDirectory(t *testing.T) {
 	tmp := t.TempDir()
 	orig, err := os.Getwd()
 	if err != nil {
@@ -288,26 +288,25 @@ func TestCreateSafe_GitHubGPGSetupFailureRollsBackNewDirectory(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(orig) })
 
-	origProvider := newGitHubGPGProvider
-	newGitHubGPGProvider = func() crypto.Provider { return failingProvider{} }
-	t.Cleanup(func() { newGitHubGPGProvider = origProvider })
+	origGenerate := generateKey
+	generateKey = func(string, string) error { return errors.New("key setup failed") }
+	t.Cleanup(func() { generateKey = origGenerate })
 
 	safeName := "myapp"
 	err = createSafe(&prompt.InitAnswers{
-		SafeName:       safeName,
-		Encryption:     "github-gpg",
-		GitHubUsername: "this-user-does-not-exist-xyz-123456",
-		Backend:        "file",
+		SafeName:   safeName,
+		Encryption: "aes",
+		Backend:    "file",
 	})
 	if err == nil {
-		t.Fatal("expected createSafe to fail for invalid github username")
+		t.Fatal("expected createSafe to fail when key setup fails")
 	}
 	if _, statErr := os.Stat(filepath.Join(tmp, safeName)); !os.IsNotExist(statErr) {
 		t.Fatalf("expected %q to be removed after failed add, stat err = %v", safeName, statErr)
 	}
 }
 
-func TestCreateSafe_GitHubGPGSetupFailureKeepsPreExistingDirectory(t *testing.T) {
+func TestCreateSafe_KeySetupFailureKeepsPreExistingDirectory(t *testing.T) {
 	tmp := t.TempDir()
 	orig, err := os.Getwd()
 	if err != nil {
@@ -318,9 +317,9 @@ func TestCreateSafe_GitHubGPGSetupFailureKeepsPreExistingDirectory(t *testing.T)
 	}
 	t.Cleanup(func() { _ = os.Chdir(orig) })
 
-	origProvider := newGitHubGPGProvider
-	newGitHubGPGProvider = func() crypto.Provider { return failingProvider{} }
-	t.Cleanup(func() { newGitHubGPGProvider = origProvider })
+	origGenerate := generateKey
+	generateKey = func(string, string) error { return errors.New("key setup failed") }
+	t.Cleanup(func() { generateKey = origGenerate })
 
 	safeName := "myapp"
 	if err := os.Mkdir(filepath.Join(tmp, safeName), 0o755); err != nil {
@@ -328,20 +327,19 @@ func TestCreateSafe_GitHubGPGSetupFailureKeepsPreExistingDirectory(t *testing.T)
 	}
 
 	err = createSafe(&prompt.InitAnswers{
-		SafeName:       safeName,
-		Encryption:     "github-gpg",
-		GitHubUsername: "this-user-does-not-exist-xyz-123456",
-		Backend:        "file",
+		SafeName:   safeName,
+		Encryption: "aes",
+		Backend:    "file",
 	})
 	if err == nil {
-		t.Fatal("expected createSafe to fail for invalid github username")
+		t.Fatal("expected createSafe to fail when key setup fails")
 	}
 	if _, statErr := os.Stat(filepath.Join(tmp, safeName)); statErr != nil {
 		t.Fatalf("expected pre-existing directory %q to be kept, stat err = %v", safeName, statErr)
 	}
 }
 
-func TestCreateSafe_GitHubGPGSetupFailureDoesNotUpdateGitignore(t *testing.T) {
+func TestCreateSafe_KeySetupFailureDoesNotUpdateGitignore(t *testing.T) {
 	tmp := t.TempDir()
 	orig, err := os.Getwd()
 	if err != nil {
@@ -352,9 +350,9 @@ func TestCreateSafe_GitHubGPGSetupFailureDoesNotUpdateGitignore(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chdir(orig) })
 
-	origProvider := newGitHubGPGProvider
-	newGitHubGPGProvider = func() crypto.Provider { return failingProvider{} }
-	t.Cleanup(func() { newGitHubGPGProvider = origProvider })
+	origGenerate := generateKey
+	generateKey = func(string, string) error { return errors.New("key setup failed") }
+	t.Cleanup(func() { generateKey = origGenerate })
 
 	before := "node_modules/\n"
 	if err := os.WriteFile(".gitignore", []byte(before), 0o644); err != nil {
@@ -362,13 +360,12 @@ func TestCreateSafe_GitHubGPGSetupFailureDoesNotUpdateGitignore(t *testing.T) {
 	}
 
 	err = createSafe(&prompt.InitAnswers{
-		SafeName:       "myapp",
-		Encryption:     "github-gpg",
-		GitHubUsername: "this-user-does-not-exist-xyz-123456",
-		Backend:        "file",
+		SafeName:   "myapp",
+		Encryption: "aes",
+		Backend:    "file",
 	})
 	if err == nil {
-		t.Fatal("expected createSafe to fail for invalid github username")
+		t.Fatal("expected createSafe to fail when key setup fails")
 	}
 
 	after, err := os.ReadFile(".gitignore")
@@ -415,10 +412,83 @@ func TestStdinIsTTY_FalseForPipe(t *testing.T) {
 	}
 }
 
-type failingProvider struct{}
+const twoContextKubeconfig = `apiVersion: v1
+kind: Config
+current-context: dev
+clusters:
+- {name: c, cluster: {server: "https://127.0.0.1:6443"}}
+users:
+- {name: u, user: {token: t}}
+contexts:
+- {name: dev, context: {cluster: c, user: u}}
+- {name: prod, context: {cluster: c, user: u}}
+`
 
-func (failingProvider) Encrypt([]byte) ([]byte, error) { return nil, nil }
-func (failingProvider) Decrypt([]byte) ([]byte, error) { return nil, nil }
-func (failingProvider) Setup(string, string) error     { return errors.New("setup failed") }
-func (failingProvider) IsInitialized() bool            { return false }
-func (failingProvider) SealOnly() bool                 { return true }
+func writeKubeconfig(t *testing.T, content string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "kubeconfig")
+	if err := os.WriteFile(p, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// Tests run with a pipe on stdin, so resolveKubeContext never prompts here.
+func TestResolveKubeContext(t *testing.T) {
+	kubeconfig := writeKubeconfig(t, twoContextKubeconfig)
+
+	if got, err := resolveKubeContext(kubeconfig, ""); err != nil || got != "dev" {
+		t.Errorf("default = %q, %v; want the current context dev", got, err)
+	}
+	if got, err := resolveKubeContext(kubeconfig, "prod"); err != nil || got != "prod" {
+		t.Errorf("explicit = %q, %v; want prod", got, err)
+	}
+	if _, err := resolveKubeContext(kubeconfig, "staging"); err == nil || !strings.Contains(err.Error(), "staging") {
+		t.Errorf("unknown context should fail and name it, got %v", err)
+	}
+
+	noCurrent := writeKubeconfig(t, strings.Replace(twoContextKubeconfig, "current-context: dev\n", "", 1))
+	if _, err := resolveKubeContext(noCurrent, ""); err == nil || !strings.Contains(err.Error(), "--kube-context") {
+		t.Errorf("no current context should ask for --kube-context, got %v", err)
+	}
+}
+
+func TestMissingFlags_Kubernetes(t *testing.T) {
+	missing := missingFlags(&prompt.InitAnswers{SafeName: "a", Encryption: "aes", Backend: "kubernetes"})
+	if len(missing) != 1 || missing[0] != "--kube-namespace" {
+		t.Errorf("missingFlags() = %v, want only --kube-namespace", missing)
+	}
+}
+
+func TestCreateSafe_Kubernetes(t *testing.T) {
+	tmp := t.TempDir()
+	orig, _ := os.Getwd()
+	if err := os.Chdir(tmp); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chdir(orig) })
+
+	err := createSafe(&prompt.InitAnswers{
+		SafeName:      "myapp",
+		Encryption:    "aes",
+		Backend:       "kubernetes",
+		Kubeconfig:    "/home/me/.kube/config",
+		KubeContext:   "prod",
+		KubeNamespace: "payments",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := config.Load(filepath.Join("myapp", "penhan.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := config.KubernetesConfig{Kubeconfig: "/home/me/.kube/config", Context: "prod", Namespace: "payments", Safe: "myapp"}
+	if cfg.Backend.Type != "kubernetes" || cfg.Backend.Kubernetes != want {
+		t.Errorf("backend = %+v, want kubernetes %+v", cfg.Backend, want)
+	}
+	if _, err := os.Stat(filepath.Join("myapp", ".penhan", "vault-token")); !os.IsNotExist(err) {
+		t.Error("kubernetes backend must not write a vault token")
+	}
+}

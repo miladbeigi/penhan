@@ -3,21 +3,9 @@ package secrets
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
-
-// ParseFile reads a YAML or JSON file and returns the key-value pairs.
-func ParseFile(path string) (map[string]string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read file: %w", err)
-	}
-
-	return Parse(data, filepath.Ext(path))
-}
 
 // Parse decodes YAML or JSON content (selected by ext) into key-value pairs.
 func Parse(data []byte, ext string) (map[string]string, error) {
