@@ -20,7 +20,7 @@ architecture, verifies it against the release's checksums.txt, checks that
 the new binary runs, and then atomically replaces the running binary.
 
 Development builds (not installed from a release) are only replaced with
---force.`,
+--force, and never with a release older than the build itself.`,
 	Args: cobra.NoArgs,
 	RunE: runUpdate,
 }
@@ -52,6 +52,16 @@ func runUpdate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	latest := rel.Version()
+
+	// --force exists to move a development build onto a release, never to
+	// replace a build with an older one.
+	if update.IsDowngrade(latest, current) {
+		fmt.Printf("This build (%s) is newer than the latest release (%s).\n", current, latest)
+		if checkOnly {
+			return nil
+		}
+		return fmt.Errorf("refusing to downgrade to %s; wait for a newer release", latest)
+	}
 
 	switch {
 	case update.Newer(latest, current):
