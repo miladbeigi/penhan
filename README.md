@@ -257,15 +257,13 @@ make test-e2e
 
 ## Release Process
 
-Releases are automated via GitHub Actions and GoReleaser:
+Releases are published automatically from `CHANGELOG.md`:
 
-1. Update `CHANGELOG.md` with changes
-2. Tag a release:
-   ```bash
-   git tag -a v1.0.0 -m "Release v1.0.0"
-   git push origin v1.0.0
-   ```
-3. GitHub Actions builds and publishes binaries to [Releases](https://github.com/miladbeigi/penhan/releases)
+1. As changes land, describe them under `## [Unreleased]` in `CHANGELOG.md`.
+2. To release, open a PR that renames `## [Unreleased]` to the new version and date, e.g. `## [0.7.0] - 2026-10-01`, with a fresh empty `## [Unreleased]` above it. Pick the version by [semver](https://semver.org/): while below 1.0, breaking changes bump the minor version.
+3. Merge it. The Release workflow sees a changelog version with no tag, runs the full test suite, tags `v0.7.0`, and publishes binaries with GoReleaser. The changelog section becomes the release notes.
+
+Merges that don't add a new version section (including dependency updates) release nothing. The workflow refuses a version that isn't newer than the latest tag. Pushing a `vX.Y.Z` tag by hand still works too, as long as `CHANGELOG.md` has a section for that version.
 
 ## License
 
