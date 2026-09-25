@@ -10,7 +10,7 @@ All commands except `add`, `update`, and `version` run inside a safe directory, 
 | [`check`](#penhan-check) | Compare local secrets with the backend |
 | [`push`](#penhan-push) | Write new and changed secrets to the backend |
 | [`import`](#penhan-import) | Bring existing Kubernetes Secrets into a safe |
-| [`update`](#penhan-update) | Update penhan to the latest release |
+| [`update`](#penhan-update) | Update Penhan to the latest release |
 | [`version`](#penhan-version) | Print version information |
 
 ## `penhan add`
@@ -85,14 +85,14 @@ Kubernetes backend only. With no arguments, lists every Secret in the safe's nam
 penhan update [--check] [--force]
 ```
 
-Downloads the latest release for your OS and architecture and verifies it against the release's `checksums.txt`. It runs the new binary once to confirm it works, then replaces the installed binary atomically. If penhan is installed in a directory you can't write to, run it with `sudo`.
+Downloads the latest release for your OS and architecture and verifies it against the release's `checksums.txt`. It runs the new binary once to confirm it works, then replaces the installed binary atomically. If Penhan is installed in a directory you can't write to, run it with `sudo`.
 
 | Flag | Description |
 |---|---|
 | `--check` | Only report whether a newer release exists |
 | `--force` | Replace a development build (e.g. one built from source) with the latest release. `update` never installs a release older than the running build, even with `--force`. |
 
-In an interactive terminal, penhan checks for a new release at most once a day and prints a one-line notice. It never installs anything on its own. The check is skipped when output isn't a terminal or `CI` is set. Set `PENHAN_NO_UPDATE_NOTIFIER=1` to disable it.
+In an interactive terminal, Penhan checks for a new release at most once a day and prints a one-line notice. It never installs anything on its own. The check is skipped when output isn't a terminal or `CI` is set. Set `PENHAN_NO_UPDATE_NOTIFIER=1` to disable it.
 
 ## `penhan version`
 

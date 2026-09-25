@@ -1,6 +1,6 @@
 # File backend
 
-Writes an encrypted copy of each secret to a directory instead of a remote service. It's useful for trying penhan without any infrastructure, or when another tool picks up the files.
+Writes an encrypted copy of each secret to a directory instead of a remote service. It's useful for trying Penhan without any infrastructure, or when another tool picks up the files.
 
 ## Setup
 

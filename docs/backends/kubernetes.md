@@ -8,7 +8,7 @@ Pushes each secret as a native `Opaque` Secret in one namespace, with one data k
 penhan add myapp --encryption=aes --backend=kubernetes --kube-namespace=myapp
 ```
 
-penhan uses your kubeconfig: `--kubeconfig`, `$KUBECONFIG`, or `~/.kube/config`. No cluster credentials are stored in the safe. The namespace must already exist.
+Penhan uses your kubeconfig: `--kubeconfig`, `$KUBECONFIG`, or `~/.kube/config`. No cluster credentials are stored in the safe. The namespace must already exist.
 
 ## Name mapping
 
@@ -24,12 +24,12 @@ Names must be valid Kubernetes names: lowercase letters, digits, `-`, and `.`. A
 
 ## Guardrails
 
-- **The context is pinned.** `add` records the kubeconfig context (the current one, or `--kube-context`) in `penhan.yaml`. Every later command uses that context, even after `kubectl config use-context`. If a teammate's kubeconfig doesn't have the context, penhan fails instead of falling back to another cluster.
-- **Ownership is enforced.** Every Secret penhan writes has the label `app.kubernetes.io/managed-by: penhan` and the annotations `penhan/safe` and `penhan/path`. `check` and `push` refuse to touch a Secret that something else created, that belongs to another safe, or that holds a different path mapping to the same name (e.g. `db/main.yaml` and `db-main.yaml`).
+- **The context is pinned.** `add` records the kubeconfig context (the current one, or `--kube-context`) in `penhan.yaml`. Every later command uses that context, even after `kubectl config use-context`. If a teammate's kubeconfig doesn't have the context, Penhan fails instead of falling back to another cluster.
+- **Ownership is enforced.** Every Secret Penhan writes has the label `app.kubernetes.io/managed-by: penhan` and the annotations `penhan/safe` and `penhan/path`. `check` and `push` refuse to touch a Secret that something else created, that belongs to another safe, or that holds a different path mapping to the same name (e.g. `db/main.yaml` and `db-main.yaml`).
 - **Pushes replace data.** A key removed from the local file is removed from the Secret. Labels and annotations added by other tools are kept.
 - **Nothing is deleted.** Removing a local file leaves the Secret in place.
 
-penhan decrypts secrets locally and sends them to the API server over TLS. Encrypting Secrets at rest inside the cluster is the cluster's job; see [Encrypting confidential data at rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/).
+Penhan decrypts secrets locally and sends them to the API server over TLS. Encrypting Secrets at rest inside the cluster is the cluster's job; see [Encrypting confidential data at rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/).
 
 ## Importing existing Secrets
 
@@ -53,15 +53,15 @@ penhan check                   # reports it as unchanged
 git add -A && git commit -m "Import api-key"
 ```
 
-For each imported Secret, penhan:
+For each imported Secret, Penhan:
 
 1. writes it straight to an encrypted `secrets/<name>.yaml.enc`, so the plaintext never touches disk
 2. checks the file reads back as exactly the Secret's data
-3. adds the penhan label and annotations to the Secret
+3. adds the Penhan label and annotations to the Secret
 
-The Secret's data, type, and other labels aren't changed, so workloads using it aren't restarted. If the data changes while the import runs, penhan stops instead of marking the Secret.
+The Secret's data, type, and other labels aren't changed, so workloads using it aren't restarted. If the data changes while the import runs, Penhan stops instead of marking the Secret.
 
-penhan never imports:
+Penhan never imports:
 
 - non-`Opaque` Secrets, such as image pull secrets or TLS Secrets
 - Secrets managed by Helm, Argo CD, or another tool, or with an owner reference
@@ -70,7 +70,7 @@ penhan never imports:
 
 ## Permissions
 
-penhan needs `get`, `list`, `create`, and `update` on Secrets in the namespace (`list` is only used by `import`):
+Penhan needs `get`, `list`, `create`, and `update` on Secrets in the namespace (`list` is only used by `import`):
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1

@@ -37,4 +37,4 @@ path "secret/data/myapp/*" {
 
 - Only KV version 2 mounts are supported.
 - A soft-deleted secret is reported as `new`, and `push` writes a new version.
-- penhan never deletes secrets from Vault. Removing a local file leaves the Vault secret in place.
+- Penhan never deletes secrets from Vault. Removing a local file leaves the Vault secret in place.

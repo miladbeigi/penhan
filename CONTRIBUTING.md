@@ -43,7 +43,7 @@ docs/                User documentation
 
 User-facing changes should update the relevant page under [`docs/`](docs/) and add an entry under `## [Unreleased]` in [`CHANGELOG.md`](CHANGELOG.md).
 
-The README demo is rendered from [`docs/demo/demo.tape`](docs/demo/demo.tape) with [VHS](https://github.com/charmbracelet/vhs). To re-record it after changing the CLI's output, install VHS and Docker, put the penhan you want to show on your `PATH`, and run:
+The README demo is rendered from [`docs/demo/demo.tape`](docs/demo/demo.tape) with [VHS](https://github.com/charmbracelet/vhs). To re-record it after changing the CLI's output, install VHS and Docker, put the `penhan` binary you want to show on your `PATH`, and run:
 
 ```bash
 make demo

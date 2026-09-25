@@ -1,6 +1,6 @@
 # Getting started
 
-This guide walks through creating a safe, adding secrets, and syncing them to a backend. For install instructions, see the [README](../README.md#install).
+This guide walks through creating a safe, adding secrets, and syncing them to a backend. For install instructions, see the [README](../README.md#-install).
 
 ## Concepts
 
@@ -95,7 +95,7 @@ penhan check
 
 Without the key, every command stops with `encryption key not found` rather than creating a new key that couldn't decrypt the existing files. Share keys through a password manager or another channel outside Git. See [Encryption and keys](encryption.md).
 
-For a Vault safe, each person also needs a token at `.penhan/vault-token`. For a Kubernetes safe, penhan uses their kubeconfig.
+For a Vault safe, each person also needs a token at `.penhan/vault-token`. For a Kubernetes safe, Penhan uses their kubeconfig.
 
 ## Next steps
 

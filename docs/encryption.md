@@ -25,7 +25,7 @@ myapp/.penhan/vault-token      # Vault safes only
 
 So plaintext secrets at any depth, keys, and tokens stay out of Git. What gets committed is `penhan.yaml` and the encrypted `*.enc` files.
 
-> Safes created with penhan 0.5.x or earlier have entries like `myapp/secrets/*.yaml`, which don't match nested files such as `secrets/db/main.yaml`. Change them to the `**/` form above.
+> Safes created with Penhan 0.5.x or earlier have entries like `myapp/secrets/*.yaml`, which don't match nested files such as `secrets/db/main.yaml`. Change them to the `**/` form above.
 
 ## Keys
 
@@ -48,4 +48,4 @@ To keep diffs meaningful anyway, `decrypt` leaves the `.enc` file in place, and 
 
 ## Migrating from `github-gpg`
 
-penhan 0.6.0 removed the `github-gpg` method. A safe still configured with it fails with an explanation. To migrate, decrypt its `.enc` files with your GPG private key (`gpg --decrypt`) and create a new safe with `aes` or `gpg`.
+Penhan 0.6.0 removed the `github-gpg` method. A safe still configured with it fails with an explanation. To migrate, decrypt its `.enc` files with your GPG private key (`gpg --decrypt`) and create a new safe with `aes` or `gpg`.

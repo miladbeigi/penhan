@@ -1,4 +1,4 @@
-<h1 align="center">penhan</h1>
+<h1 align="center">🔐 Penhan</h1>
 
 <p align="center">
   <strong>Keep secrets encrypted in Git. Sync them to Vault or Kubernetes.</strong>
@@ -12,22 +12,22 @@
 </p>
 
 <p align="center">
-  <img src="docs/demo/demo.gif" alt="penhan demo: create a safe, encrypt a secret, push it to Vault" width="800">
+  <img src="docs/demo/demo.gif" alt="Penhan demo: create a safe, encrypt a secret, push it to Vault" width="800">
 </p>
 
-penhan is a small CLI for teams that want Git to be the source of truth for their secrets. Secrets live in your repository as encrypted files, reviewed and versioned like code. penhan decrypts them locally and pushes them to the backend your applications read from.
+Penhan is a small CLI for teams that want Git to be the source of truth for their secrets. Secrets live in your repository as encrypted files, reviewed and versioned like code. Penhan decrypts them locally and pushes them to the backend your applications read from.
 
-## Features
+## ✨ Features
 
-- **Encrypted at rest in Git**: AES-256-GCM or OpenPGP, with keys generated locally per safe. Plaintext and keys are gitignored automatically.
-- **Multiple backends**: HashiCorp Vault KV v2, Kubernetes Secrets, or an encrypted directory.
-- **Changes only**: `check` shows what differs from the backend; `push` writes only new and changed secrets.
-- **Safe by default**: pins the Kubernetes context, never overwrites resources it doesn't own, never regenerates a missing key, and keeps secret values byte for byte.
-- **Adopt what exists**: `penhan import` brings Secrets already in a cluster under management without changing them.
-- **Clean diffs**: re-encrypting an unchanged secret leaves its file untouched.
-- **Self-updating**: `penhan update` installs the latest verified release.
+- 🔒 **Encrypted at rest in Git**: AES-256-GCM or OpenPGP, with keys generated locally per safe. Plaintext and keys are gitignored automatically.
+- 🔌 **Multiple backends**: HashiCorp Vault KV v2, Kubernetes Secrets, or an encrypted directory.
+- 🎯 **Changes only**: `check` shows what differs from the backend; `push` writes only new and changed secrets.
+- 🛡️ **Safe by default**: pins the Kubernetes context, never overwrites resources it doesn't own, never regenerates a missing key, and keeps secret values byte for byte.
+- 📥 **Adopt what exists**: `penhan import` brings Secrets already in a cluster under management without changing them.
+- 🧹 **Clean diffs**: re-encrypting an unchanged secret leaves its file untouched.
+- 🔄 **Self-updating**: `penhan update` installs the latest verified release.
 
-## How it works
+## ⚙️ How it works
 
 ```mermaid
 flowchart LR
@@ -45,7 +45,7 @@ flowchart LR
 
 A project holds one or more **safes**. Each safe is a directory with its own `penhan.yaml`, encryption key, and backend settings, so one repository can manage secrets for several apps, environments, or namespaces.
 
-## Install
+## 📦 Install
 
 **Prebuilt binary** (macOS and Linux, amd64 and arm64):
 
@@ -65,7 +65,7 @@ go install github.com/miladbeigi/penhan/cmd/penhan@latest
 
 Update any time with `penhan update`.
 
-## Quick start
+## 🚀 Quick start
 
 ```bash
 # Create a safe backed by Vault (or --backend=kubernetes / --backend=file)
@@ -83,7 +83,7 @@ penhan push      # write new and changed secrets
 
 Run `penhan add` without flags for an interactive setup. See [Getting started](docs/getting-started.md) for the full walkthrough.
 
-## Documentation
+## 📚 Documentation
 
 | Guide | |
 |---|---|
@@ -95,10 +95,10 @@ Run `penhan add` without flags for an interactive setup. See [Getting started](d
 | [Kubernetes backend](docs/backends/kubernetes.md) | Secrets in a namespace, importing existing ones, guardrails |
 | [File backend](docs/backends/file.md) | An encrypted directory |
 
-## Contributing
+## 🤝 Contributing
 
 Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for how to build, test, and release.
 
-## License
+## 📄 License
 
 [MIT](LICENSE)
