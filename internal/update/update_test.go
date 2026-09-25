@@ -276,3 +276,26 @@ func (c countingTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	c.n.Add(1)
 	return c.rt.RoundTrip(r)
 }
+
+func TestIsDowngrade(t *testing.T) {
+	cases := []struct {
+		latest, current string
+		want            bool
+	}{
+		{"0.5.1", "0.6.0", true},               // release older than current release
+		{"0.6.0", "0.6.0", false},              // same release: a reinstall
+		{"0.6.0", "0.5.1", false},              // a real update
+		{"0.5.1", "v0.5.1-12-gfa30a39", true},  // dev build 12 commits past the latest release
+		{"0.5.0", "v0.5.1-12-gfa30a39", true},  // even older release
+		{"0.6.0", "v0.5.1-12-gfa30a39", false}, // a newer release exists
+		{"0.5.1", "v0.5.1-12-gfa30a39-dirty", true},
+		{"0.5.1", "v0.5.1-dirty", false}, // local edits on top of the same release
+		{"0.5.1", "dev", false},          // unknown: allowed with --force
+		{"0.5.1", "", false},
+	}
+	for _, tc := range cases {
+		if got := IsDowngrade(tc.latest, tc.current); got != tc.want {
+			t.Errorf("IsDowngrade(%q, %q) = %v, want %v", tc.latest, tc.current, got, tc.want)
+		}
+	}
+}

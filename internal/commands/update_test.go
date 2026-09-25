@@ -168,3 +168,22 @@ func TestUpdateNoticeDisabledOutsideTerminal(t *testing.T) {
 		t.Error("PENHAN_NO_UPDATE_NOTIFIER must disable the notice")
 	}
 }
+
+// Reproduces an accidental downgrade: a dev build made after the latest
+// release must not be replaced by it, even with --force.
+func TestUpdateRefusesDowngradeEvenWithForce(t *testing.T) {
+	exe := withFakeRelease(t, "v0.6.0-12-gfa30a39")
+	for _, args := range [][]string{nil, {"--force"}} {
+		out, err := runUpdateCmd(t, args...)
+		if err == nil || !strings.Contains(err.Error(), "refusing to downgrade") {
+			t.Fatalf("update %v error = %v, want refusal\n%s", args, err, out)
+		}
+		if exeContent(t, exe) != "old" {
+			t.Fatalf("update %v replaced a newer build with an older release", args)
+		}
+	}
+	out, err := runUpdateCmd(t, "--check")
+	if err != nil || !strings.Contains(out, "newer than the latest release") {
+		t.Errorf("update --check = %q, %v", out, err)
+	}
+}

@@ -61,7 +61,7 @@ penhan update           # download, verify, and install the latest release
 penhan update --check   # only report whether a newer release exists
 ```
 
-`update` downloads the release archive for your OS and architecture, verifies it against the release's `checksums.txt`, runs the new binary once to make sure it works, and then atomically replaces the installed one. If penhan lives in a directory you can't write to (e.g. `/usr/local/bin`), run it with `sudo`.
+`update` downloads the release archive for your OS and architecture, verifies it against the release's `checksums.txt`, runs the new binary once to make sure it works, and then atomically replaces the installed one. It never downgrades: a build newer than the latest release (e.g. one built from `master`) is left alone, even with `--force`. If penhan lives in a directory you can't write to (e.g. `/usr/local/bin`), run it with `sudo`.
 
 When you use penhan in a terminal, it checks for a new release at most once a day and prints a one-line notice on stderr. It never installs anything by itself. The check is skipped in scripts and CI (when stderr isn't a terminal or `CI` is set); set `PENHAN_NO_UPDATE_NOTIFIER=1` to turn it off entirely.
 

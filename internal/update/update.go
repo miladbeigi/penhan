@@ -276,6 +276,31 @@ func IsRelease(v string) bool {
 	return releaseVersion.MatchString(v)
 }
 
+// describedVersion matches `git describe` output for builds made after a
+// release, e.g. "v0.5.1-12-gfa30a39" (12 commits after v0.5.1), optionally
+// with "-dirty" for uncommitted changes.
+var describedVersion = regexp.MustCompile(`^v?(\d+\.\d+\.\d+)(?:-(\d+)-g[0-9a-f]+)?(?:-dirty)?$`)
+
+// IsDowngrade reports whether installing release latest would replace the
+// current build with an older one: a release older than current, or a
+// release no newer than the one a development build was made after.
+// Unknown versions such as "dev" are never reported as downgrades.
+func IsDowngrade(latest, current string) bool {
+	if IsRelease(current) {
+		return Newer(current, latest)
+	}
+	m := describedVersion.FindStringSubmatch(current)
+	if m == nil {
+		return false
+	}
+	base, commits := m[1], m[2]
+	if Newer(latest, base) {
+		return false
+	}
+	// latest <= base: older, or the same release this build already extends.
+	return Newer(base, latest) || (commits != "" && commits != "0")
+}
+
 // Newer reports whether release version latest is newer than current. Both
 // must be release versions; anything else compares as not newer.
 func Newer(latest, current string) bool {
