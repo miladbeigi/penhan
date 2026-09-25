@@ -15,6 +15,12 @@ var rootCmd = &cobra.Command{
 	// on top of them buries the actual message.
 	SilenceUsage:  true,
 	SilenceErrors: true,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		startUpdateNotice(cmd)
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		printUpdateNotice()
+	},
 }
 
 func Execute() {

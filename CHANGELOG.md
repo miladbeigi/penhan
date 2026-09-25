@@ -10,14 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 
 - `penhan import [name...] [--all]` (kubernetes backend) takes over Secrets that already exist in the namespace. With no arguments it lists each Secret as `ready`, `present`, or `skip` with a reason. Imported Secrets are written straight to encrypted `secrets/<name>.yaml.enc` files and marked as managed by the safe; their data is not changed. Secrets managed by Helm, Argo CD, other tools, or other safes, non-`Opaque` types, and binary values are never imported.
-
-### Fixed
-
-- Secret values were silently changed by YAML/JSON type conversion before being pushed: `pin: 0012` was pushed as `10`, `0x1F` as `31`, `1.10` as `1.1`, an empty value as `<nil>`, dates as `2026-01-02 00:00:00 +0000 UTC`, and large JSON numbers in exponent form. Values are now pushed exactly as written, and duplicate keys are rejected.
-- The `.gitignore` entries `add` writes did not match nested secrets: `myapp/secrets/*.yaml` ignored `secrets/db.yaml` but not `secrets/db/password.yaml`, so nested plaintext secrets could be committed. Entries are now `myapp/secrets/**/*.yaml` (and `.yml`, `.json`). **Existing safes keep the old entries:** in your `.gitignore`, replace `<safe>/secrets/*.` with `<safe>/secrets/**/*.`.
-
-### Added
-
+- `penhan update` updates penhan in place to the latest GitHub release. It verifies the archive against the release's `checksums.txt` and runs the new binary once before atomically replacing the old one. `--check` only reports. It uses github.com release URLs rather than the REST API, which caps unauthenticated clients at 60 requests per hour per IP. Versions up to 0.5.1 don't have this command; install the next release manually once.
+- In an interactive terminal, penhan checks for a new release at most once a day and prints a notice on stderr. It never installs anything by itself, and it's off in scripts, in CI, and with `PENHAN_NO_UPDATE_NOTIFIER=1`.
 - Kubernetes backend (`--backend=kubernetes`): each secret file is pushed as an `Opaque` Secret in the safe's namespace (`db/password.yaml` → Secret `db-password`), readable by workloads as usual. New `add` flags: `--kube-namespace` (required), `--kube-context`, `--kubeconfig`.
   - `add` pins the kubeconfig context in `penhan.yaml`, so switching `kubectl` contexts later can't redirect a push to another cluster.
   - Secrets are labeled `app.kubernetes.io/managed-by: penhan` and annotated with their safe and source path. penhan refuses to overwrite Secrets it didn't create, Secrets owned by another safe, and two paths that map to the same name.
@@ -25,12 +19,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
+- `penhan decrypt` now keeps the `.enc` file next to the plaintext. `penhan encrypt` keeps an existing `.enc` byte for byte when it already decrypts to the plaintext. Because encryption is randomized, a decrypt/encrypt cycle without edits used to rewrite every `.enc` file and show a diff in git; now only secrets that actually changed are rewritten.
 - Only `penhan add` creates encryption keys. `encrypt`, `decrypt`, `check`, and `push` now fail with `encryption key not found at …` when the key is missing. Previously they silently generated a new key, so in a fresh clone without the key, `encrypt` would encrypt new files with a key that didn't match the rest of the safe.
 - `penhan decrypt` refuses to overwrite a plaintext file whose content differs from the encrypted copy, so local edits are never silently lost.
 - `penhan encrypt` on a directory only encrypts secret files (`.yaml`, `.yml`, `.json`) and leaves others (e.g. `.gitkeep`) alone.
 
 ### Fixed
 
+- Secret values were silently changed by YAML/JSON type conversion before being pushed: `pin: 0012` was pushed as `10`, `0x1F` as `31`, `1.10` as `1.1`, an empty value as `<nil>`, dates as `2026-01-02 00:00:00 +0000 UTC`, and large JSON numbers in exponent form. Values are now pushed exactly as written, and duplicate keys are rejected.
+- The `.gitignore` entries `add` writes did not match nested secrets: `myapp/secrets/*.yaml` ignored `secrets/db.yaml` but not `secrets/db/password.yaml`, so nested plaintext secrets could be committed. Entries are now `myapp/secrets/**/*.yaml` (and `.yml`, `.json`). **Existing safes keep the old entries:** in your `.gitignore`, replace `<safe>/secrets/*.` with `<safe>/secrets/**/*.`.
 - GPG private keys were created with mode 0644 (world-readable under a typical umask). New keys are written 0600, and `add` refuses to overwrite an existing key.
 - Decrypted plaintext files were written with mode 0644. They're now written 0600.
 - Backend paths were wrong when `secrets.path` wasn't in cleaned form (e.g. `./secrets`): `secrets/db.yaml` was mapped to `secrets/db` instead of `db`.

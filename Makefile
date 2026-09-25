@@ -46,12 +46,14 @@ integration-up: ## Start Vault container for integration tests
 integration-down: ## Stop Vault container
 	cd integration && docker compose down
 
+# -count=1: these tests build the penhan binary at run time, which the Go test
+# cache cannot see, so a cached pass could hide a regression.
 test-integration: integration-up ## Run integration tests (requires Docker)
-	go test -tags=integration -v -timeout 5m ./integration/...
+	go test -count=1 -tags=integration -v -timeout 5m ./integration/...
 	@make integration-down
 
 test-e2e: ## Run e2e tests: real CLI against throwaway Vault containers (requires Docker)
-	go test -tags=e2e -v -timeout 10m ./e2e/...
+	go test -count=1 -tags=e2e -v -timeout 10m ./e2e/...
 
 build: ## Build binary
 	go build -ldflags "$(LDFLAGS)" -o penhan ./cmd/penhan
