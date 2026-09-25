@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `penhan version` reported `dev` for binaries installed with `go install github.com/miladbeigi/penhan/cmd/penhan@vX.Y.Z`, so `penhan update` treated them as development builds. The version Go records in the binary is now used.
+- The `penhan update --force` help text said it would install over a newer build, which it never does. The `encrypt` and `decrypt` summaries now describe what they do (`decrypt` keeps the `.enc` file).
+
 ## [0.6.0] - 2026-09-25
 
 ### Added
