@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-25
+
 ### Added
 
 - `penhan import [name...] [--all]` (kubernetes backend) takes over Secrets that already exist in the namespace. With no arguments it lists each Secret as `ready`, `present`, or `skip` with a reason. Imported Secrets are written straight to encrypted `secrets/<name>.yaml.enc` files and marked as managed by the safe; their data is not changed. Secrets managed by Helm, Argo CD, other tools, or other safes, non-`Opaque` types, and binary values are never imported.
