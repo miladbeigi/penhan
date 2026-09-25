@@ -96,3 +96,64 @@ func parseFile(t *testing.T, path string) (map[string]string, error) {
 	}
 	return Parse(data, filepath.Ext(path))
 }
+
+// Secret values must reach the backend byte for byte. YAML's type resolution
+// would turn "0012" into 10 and "0x1F" into 31.
+func TestParseKeepsValuesAsWritten(t *testing.T) {
+	yamlIn := strings.Join([]string{
+		"pin: 0012",
+		"hex: 0x1F",
+		"ver: 1.10",
+		"big: 12345678901234567890",
+		"date: 2026-01-02",
+		"flag: yes",
+		"quoted: \"0012\"",
+		"empty:",
+		"tilde: ~",
+		"multi: |",
+		"  line1",
+		"  line2",
+		"",
+	}, "\n")
+	got, err := Parse([]byte(yamlIn), ".yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"pin": "0012", "hex": "0x1F", "ver": "1.10", "big": "12345678901234567890",
+		"date": "2026-01-02", "flag": "yes", "quoted": "0012", "empty": "", "tilde": "",
+		"multi": "line1\nline2\n",
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("yaml %s = %q, want %q", k, got[k], v)
+		}
+	}
+
+	got, err = Parse([]byte(`{"big": 12345678901234567890, "f": 1.10, "b": true, "n": null, "s": "0012"}`), ".json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want = map[string]string{"big": "12345678901234567890", "f": "1.10", "b": "true", "n": "", "s": "0012"}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("json %s = %q, want %q", k, got[k], v)
+		}
+	}
+}
+
+func TestParseYAMLEdgeCases(t *testing.T) {
+	if m, err := Parse([]byte(""), ".yaml"); err != nil || len(m) != 0 {
+		t.Errorf("empty file = %v, %v; want empty map", m, err)
+	}
+	if _, err := Parse([]byte("- a\n- b\n"), ".yaml"); err == nil {
+		t.Error("a top-level list must be rejected")
+	}
+	if _, err := Parse([]byte("k: a\nk: b\n"), ".yaml"); err == nil {
+		t.Error("duplicate keys must be rejected")
+	}
+	m, err := Parse([]byte("base: &b secret\ncopy: *b\n"), ".yaml")
+	if err != nil || m["copy"] != "secret" {
+		t.Errorf("alias = %v, %v; want copy=secret", m, err)
+	}
+}

@@ -1,11 +1,14 @@
 package backends
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -51,6 +54,7 @@ type KubernetesProvider struct {
 // secretClient is the slice of the Secrets API penhan uses, scoped to one
 // namespace.
 type secretClient interface {
+	List(ctx context.Context) ([]corev1.Secret, error)
 	Get(ctx context.Context, name string) (*corev1.Secret, error)
 	Create(ctx context.Context, secret *corev1.Secret) error
 	Update(ctx context.Context, secret *corev1.Secret) error
@@ -163,6 +167,128 @@ func (p *KubernetesProvider) Pull(path string) ([]byte, error) {
 		return nil, err
 	}
 
+	return secretContent(secret)
+}
+
+// ImportCandidate is one Secret in the namespace and whether it can be imported.
+type ImportCandidate struct {
+	Name   string
+	Keys   int
+	Reason string // why it cannot be imported; empty when it can
+}
+
+// ImportCandidates lists every Secret in the namespace, sorted by name.
+func (p *KubernetesProvider) ImportCandidates() ([]ImportCandidate, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), kubernetesTimeout)
+	defer cancel()
+
+	items, err := p.secrets.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list secrets in %s: %w", p.namespace, err)
+	}
+	out := make([]ImportCandidate, 0, len(items))
+	for i := range items {
+		s := &items[i]
+		out = append(out, ImportCandidate{Name: s.Name, Keys: len(s.Data), Reason: p.importBlocker(s)})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+// ReadForImport returns the content of Secret name, and the secret path it
+// maps to, if penhan may take it over.
+func (p *KubernetesProvider) ReadForImport(name string) (path string, content []byte, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), kubernetesTimeout)
+	defer cancel()
+
+	secret, err := p.secrets.Get(ctx, name)
+	if apierrors.IsNotFound(err) {
+		return "", nil, fmt.Errorf("secret %s does not exist", p.ref(name))
+	}
+	if err != nil {
+		return "", nil, fmt.Errorf("get secret %s: %w", p.ref(name), err)
+	}
+	if reason := p.importBlocker(secret); reason != "" {
+		return "", nil, fmt.Errorf("cannot import %s: %s", p.ref(name), reason)
+	}
+	content, err = secretContent(secret)
+	return name, content, err
+}
+
+// Adopt marks Secret path as managed by this safe, changing only its labels
+// and annotations. It fails if the data no longer equals content, so a
+// change made in the cluster during import is never silently reverted by a
+// later push.
+func (p *KubernetesProvider) Adopt(path string, content []byte) error {
+	ctx, cancel := context.WithTimeout(context.Background(), kubernetesTimeout)
+	defer cancel()
+
+	secret, err := p.secrets.Get(ctx, path)
+	if err != nil {
+		return fmt.Errorf("get secret %s: %w", p.ref(path), err)
+	}
+	if reason := p.importBlocker(secret); reason != "" {
+		return fmt.Errorf("cannot import %s: %s", p.ref(path), reason)
+	}
+	current, err := secretContent(secret)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(current, content) {
+		return fmt.Errorf("secret %s changed during import; run import again", p.ref(path))
+	}
+
+	p.setOwnership(secret, path)
+	if err := p.secrets.Update(ctx, secret); err != nil {
+		return fmt.Errorf("mark secret %s as managed by penhan: %w", p.ref(path), err)
+	}
+	return nil
+}
+
+// importBlocker explains why penhan must not take over secret, or returns ""
+// when it may: an Opaque Secret with text values that no other tool, and no
+// other safe, manages.
+func (p *KubernetesProvider) importBlocker(secret *corev1.Secret) string {
+	if secret.Type != "" && secret.Type != corev1.SecretTypeOpaque {
+		return fmt.Sprintf("type %s is not supported (penhan manages Opaque Secrets only)", secret.Type)
+	}
+	if refs := secret.OwnerReferences; len(refs) > 0 {
+		return fmt.Sprintf("owned by %s %s", refs[0].Kind, refs[0].Name)
+	}
+	if release := secret.Annotations["meta.helm.sh/release-name"]; release != "" {
+		return fmt.Sprintf("managed by Helm release %s", release)
+	}
+	for k := range secret.Labels {
+		if strings.HasPrefix(k, "argocd.argoproj.io/") {
+			return "managed by Argo CD"
+		}
+	}
+	for k := range secret.Annotations {
+		if strings.HasPrefix(k, "argocd.argoproj.io/") {
+			return "managed by Argo CD"
+		}
+	}
+	if m := secret.Labels[managedByLabel]; m != "" && m != managedByValue {
+		return "managed by " + m
+	}
+	if m := secret.Labels[managedByLabel]; m == managedByValue {
+		if owner := secret.Annotations[safeAnnotation]; owner != p.safe {
+			return fmt.Sprintf("belongs to safe %q", owner)
+		}
+		if path := secret.Annotations[pathAnnotation]; path != secret.Name {
+			return fmt.Sprintf("already managed as %q", path)
+		}
+	}
+	for k, v := range secret.Data {
+		if !utf8.Valid(v) {
+			return fmt.Sprintf("key %q holds binary data, which secret files cannot represent", k)
+		}
+	}
+	return ""
+}
+
+// secretContent encodes a Secret's data as penhan's canonical JSON content.
+func secretContent(secret *corev1.Secret) ([]byte, error) {
 	kv := make(map[string]string, len(secret.Data))
 	for k, v := range secret.Data {
 		kv[k] = string(v)
@@ -228,6 +354,14 @@ func newRESTSecrets(restConfig *rest.Config, namespace string) (*restSecrets, er
 		return nil, err
 	}
 	return &restSecrets{client: client, namespace: namespace}, nil
+}
+
+func (r *restSecrets) List(ctx context.Context) ([]corev1.Secret, error) {
+	list := &corev1.SecretList{}
+	if err := r.client.Get().Namespace(r.namespace).Resource("secrets").Do(ctx).Into(list); err != nil {
+		return nil, err
+	}
+	return list.Items, nil
 }
 
 func (r *restSecrets) Get(ctx context.Context, name string) (*corev1.Secret, error) {

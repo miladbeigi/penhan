@@ -35,7 +35,7 @@ func TestAddCreatesSafeStructure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("add must write a .gitignore in the project dir: %v", err)
 	}
-	for _, want := range []string{"secrets/*.yaml", ".penhan/keys/", ".penhan/vault-token"} {
+	for _, want := range []string{"secrets/**/*.yaml", ".penhan/keys/", ".penhan/vault-token"} {
 		if !strings.Contains(string(gitignore), want) {
 			t.Errorf(".gitignore missing %q:\n%s", want, gitignore)
 		}

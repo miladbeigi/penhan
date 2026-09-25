@@ -31,3 +31,18 @@ type Provider interface {
 	// ErrNotFound when nothing is stored there.
 	Pull(path string) ([]byte, error)
 }
+
+// Importer is implemented by backends that can take over secrets created
+// outside penhan, so an existing setup can be brought into a safe.
+type Importer interface {
+	// ImportCandidates lists the secrets in the backend and, for each one
+	// that cannot be imported, why.
+	ImportCandidates() ([]ImportCandidate, error)
+
+	// ReadForImport returns the secret path name maps to and its content.
+	ReadForImport(name string) (path string, content []byte, err error)
+
+	// Adopt marks the secret at path as managed by this safe, provided its
+	// content still equals content.
+	Adopt(path string, content []byte) error
+}
