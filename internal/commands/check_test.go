@@ -169,7 +169,7 @@ func (f *failingBackend) Pull(string) ([]byte, error) {
 }
 
 func TestCommandSet(t *testing.T) {
-	want := map[string]bool{"add": true, "check": true, "push": true, "encrypt": true, "decrypt": true, "version": true}
+	want := map[string]bool{"add": true, "check": true, "push": true, "encrypt": true, "decrypt": true, "update": true, "version": true}
 	for _, c := range rootCmd.Commands() {
 		if c.Name() == "help" || c.Name() == "completion" {
 			continue

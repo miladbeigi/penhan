@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,8 +31,51 @@ func TestEncryptDecryptRoundtrip(t *testing.T) {
 	if err != nil || string(got) != "password: hunter2\n" {
 		t.Fatalf("decrypt round-trip = %q, %v", got, err)
 	}
-	if _, err := os.Stat(p + ".enc"); !os.IsNotExist(err) {
-		t.Error("decrypt must remove the .enc file")
+	if _, err := os.Stat(p + ".enc"); err != nil {
+		t.Error("decrypt must keep the .enc file")
+	}
+}
+
+// Encryption is randomized, so a decrypt/encrypt cycle with no edit must
+// keep the committed ciphertext byte for byte, or git shows a spurious diff.
+func TestDecryptEncryptWithoutEditKeepsCiphertext(t *testing.T) {
+	_, provider := newTestSafe(t)
+	writeSecretFile(t, "db.yaml", "password: hunter2\n")
+	p := filepath.Join("secrets", "db.yaml")
+	if err := encryptFile(p, provider); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(p + ".enc")
+
+	if err := decryptFile(p+".enc", provider); err != nil {
+		t.Fatal(err)
+	}
+	if err := encryptFile(p, provider); err != nil {
+		t.Fatal(err)
+	}
+	after, _ := os.ReadFile(p + ".enc")
+	if !bytes.Equal(before, after) {
+		t.Error("re-encrypting an unchanged secret must not rewrite the .enc file")
+	}
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Error("encrypt must remove the plaintext even when the .enc is kept")
+	}
+
+	// An actual edit does produce a new ciphertext.
+	if err := decryptFile(p+".enc", provider); err != nil {
+		t.Fatal(err)
+	}
+	writeSecretFile(t, "db.yaml", "password: rotated\n")
+	if err := encryptFile(p, provider); err != nil {
+		t.Fatal(err)
+	}
+	edited, _ := os.ReadFile(p + ".enc")
+	if bytes.Equal(before, edited) {
+		t.Fatal("an edited secret must be re-encrypted")
+	}
+	got, err := provider.Decrypt(edited)
+	if err != nil || string(got) != "password: rotated\n" {
+		t.Errorf("re-encrypted content = %q, %v", got, err)
 	}
 }
 
@@ -88,9 +132,6 @@ func TestDecryptAcceptsIdenticalPlaintext(t *testing.T) {
 
 	if err := decryptFile(p+".enc", provider); err != nil {
 		t.Fatalf("decrypt with an identical plaintext should succeed: %v", err)
-	}
-	if _, err := os.Stat(p + ".enc"); !os.IsNotExist(err) {
-		t.Error("decrypt must remove the .enc file")
 	}
 }
 
