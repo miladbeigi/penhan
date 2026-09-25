@@ -20,9 +20,9 @@ api_key: abc123
 		t.Fatal(err)
 	}
 
-	data, err := ParseFile(filePath)
+	data, err := parseFile(t, filePath)
 	if err != nil {
-		t.Fatalf("ParseFile() error = %v", err)
+		t.Fatalf("parseFile() error = %v", err)
 	}
 
 	if data["username"] != "admin" {
@@ -43,9 +43,9 @@ func TestParseJSONFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, err := ParseFile(filePath)
+	data, err := parseFile(t, filePath)
 	if err != nil {
-		t.Fatalf("ParseFile() error = %v", err)
+		t.Fatalf("parseFile() error = %v", err)
 	}
 
 	if data["username"] != "admin" {
@@ -86,4 +86,13 @@ func TestParseAllowsScalarValues(t *testing.T) {
 	if m["port"] != "5432" || m["ssl"] != "true" {
 		t.Errorf("got %v, want port=5432 ssl=true", m)
 	}
+}
+
+func parseFile(t *testing.T, path string) (map[string]string, error) {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Parse(data, filepath.Ext(path))
 }

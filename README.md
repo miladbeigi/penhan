@@ -6,12 +6,12 @@
 
 **Git-native secret management with encryption and backend sync.**
 
-Penhan keeps secrets as encrypted files in Git and pushes them to a secret backend: HashiCorp Vault, or an encrypted directory on disk. Git is the source of truth; the backend is where applications read from.
+Penhan keeps secrets as encrypted files in Git and pushes them to a secret backend: HashiCorp Vault, Kubernetes Secrets, or an encrypted directory on disk. Git is the source of truth; the backend is where applications read from.
 
 ## Features
 
 - **Git-native** — secrets live in Git as encrypted files, versioned and auditable
-- **Encrypted at rest** — GPG/PGP, AES-256-GCM, or GitHub GPG keys
+- **Encrypted at rest** — GPG/PGP or AES-256-GCM, with keys generated locally in each safe
 - **Safes** — each safe is a directory with its own config, key, and backend base path
 - **Hash-based sync** — `check` compares local files with the backend; `push` writes only what changed
 - **Directory mapping** — the folder structure under `secrets/` maps to backend paths automatically
@@ -22,6 +22,7 @@ Penhan keeps secrets as encrypted files in Git and pushes them to a secret backe
 | Backend | Status |
 |---------|--------|
 | HashiCorp Vault KV v2 | Supported |
+| Kubernetes Secrets | Supported |
 | Encrypted file directory | Supported |
 | AWS Secrets Manager | Planned |
 | GCP Secret Manager | Planned |
@@ -72,6 +73,9 @@ penhan add myapp \
   --vault-addr=https://vault.example.com \
   --vault-token-file=./vault-token
 
+# Or push to Kubernetes Secrets in a namespace (uses your kubeconfig)
+penhan add myapp --encryption=aes --backend=kubernetes --kube-namespace=myapp
+
 cd myapp
 
 # Create a secret file: a flat YAML or JSON key-value map
@@ -96,7 +100,7 @@ penhan push
 | `penhan check` | Compare local secrets with the backend and report `new`, `changed`, or `unchanged`. Never writes |
 | `penhan push` | Push secrets whose hash differs from the backend; skip the rest. Prints every secret |
 | `penhan encrypt [file\|dir]` | Encrypt secret files in place (defaults to the secrets directory) |
-| `penhan decrypt [file\|dir]` | Decrypt secret files in place (defaults to the secrets directory) |
+| `penhan decrypt [file\|dir]` | Decrypt secret files in place (defaults to the secrets directory). Refuses to overwrite a plaintext file with different content |
 | `penhan version` | Print version information |
 
 All commands except `add` and `version` run inside a safe directory.
@@ -129,20 +133,35 @@ Each safe sets its backend base path to its own name, so several safes can share
 
 Local paths map to backend paths automatically:
 
-| Local Path | Vault Path |
-|------------|------------|
-| `secrets/db/password.yaml` | `secret/data/myapp/db/password` |
-| `secrets/api/key.yaml` | `secret/data/myapp/api/key` |
+| Local Path | Vault Path | Kubernetes Secret |
+|------------|------------|-------------------|
+| `secrets/db.yaml` | `secret/data/myapp/db` | `db` |
+| `secrets/db/password.yaml` | `secret/data/myapp/db/password` | `db-password` |
+| `secrets/api/key.yaml` | `secret/data/myapp/api/key` | `api-key` |
 
-The Vault path is `{mount_path}/data/{base_path}/{secret path}`, where `base_path` is the safe name.
+The Vault path is `{mount_path}/data/{base_path}/{secret path}`, where `base_path` is the safe name. The Kubernetes Secret name is the secret path with `/` replaced by `-`, in the safe's namespace.
+
+### Kubernetes
+
+The `kubernetes` backend writes each secret file as a native `Opaque` Secret, one data key per key in the file, so pods can mount it or read it with `envFrom` as usual. The `.enc` files in Git stay encrypted with the safe's key; penhan decrypts them locally and sends plaintext to the API server over TLS, just as it does for Vault. Encrypting Secrets at rest in etcd is the cluster's job: see [encryption at rest](https://kubernetes.io/docs/tasks/administer-cluster/encrypt-data/).
+
+Guardrails:
+
+- **Context is pinned.** `add` records the kubeconfig context (the current one, or `--kube-context`) in `penhan.yaml`. Later pushes always go to that context, even after `kubectl config use-context`. If the context doesn't exist in someone's kubeconfig, penhan fails instead of falling back to another cluster.
+- **Ownership is enforced.** Every Secret penhan writes has the label `app.kubernetes.io/managed-by: penhan` and the annotations `penhan/safe` and `penhan/path`. `check` and `push` refuse to touch a Secret created by something else, owned by another safe, or holding a different path that maps to the same name (e.g. `db/password.yaml` and `db-password.yaml`).
+- **Names are validated, not rewritten.** Secret names must be lowercase DNS names (`a-z`, `0-9`, `-`, `.`). A file like `secrets/DB_Password.yaml` is rejected with an error, not silently renamed, because renaming could merge two files into one Secret.
+- **Pushes replace data.** A key removed from the local file is removed from the Secret. Labels and annotations added by other tools are kept.
+
+penhan needs `get`, `create`, and `update` on `secrets` in the namespace. The namespace must already exist. No credentials are stored in the safe: penhan uses your kubeconfig (`--kubeconfig`, `$KUBECONFIG`, or `~/.kube/config`).
 
 ### Encryption
 
-Penhan supports three encryption methods:
+Penhan supports two encryption methods. Both generate their key locally when the safe is created and store it under `.penhan/keys/` (gitignored), so there is nothing to fetch and nothing to keep in sync:
 
-- **`gpg`** — uses your GPG keypair for encryption
-- **`github-gpg`** — fetches your public key from `https://github.com/<username>.gpg` and encrypts with it; seal-only, so decrypting requires your private key on the local machine
-- **`aes`** — symmetric AES-256-GCM encryption with a generated key stored under `.penhan/keys/`
+- **`gpg`** — an OpenPGP keypair generated for the safe
+- **`aes`** — symmetric AES-256-GCM with a random 256-bit key
+
+Back up the key file and share it with teammates out of band: anyone who clones the repository needs it to decrypt the `.enc` files, and losing it means losing access to them. Only `penhan add` creates keys. Every other command fails with `encryption key not found` when the key is missing, rather than generating a new one that would not match the existing files.
 
 Secret files are flat YAML or JSON key-value pairs (`.yaml`, `.yml`, or `.json`); nested maps or lists are rejected. `check` and `push` read both plaintext and `.enc` files; when both exist for the same secret, the plaintext wins.
 
@@ -162,20 +181,24 @@ There is no local state file. `check` hashes each local secret's content and rea
 
 ```yaml
 encryption:
-  method: aes          # gpg, github-gpg, or aes
+  method: aes          # gpg or aes
   aes:
     key_path: .penhan/keys/aes.key
   # gpg:
   #   key_path: .penhan/keys/gpg.key
-  #   github_username: yourname  # required for github-gpg
 
 backend:
-  type: vault          # vault or file
+  type: vault          # vault, kubernetes, or file
   vault:
     addr: https://vault.example.com
     token_path: .penhan/vault-token
     mount_path: secret
     base_path: myapp   # the safe name
+  # kubernetes:
+  #   context: prod-cluster   # pinned by add
+  #   namespace: myapp
+  #   safe: myapp             # recorded on each Secret for ownership checks
+  #   kubeconfig: /path/to/kubeconfig   # optional; default $KUBECONFIG or ~/.kube/config
   # file:
   #   path: .penhan/remote   # encrypted copies written here instead of Vault
 
@@ -202,7 +225,7 @@ make lint
 # Run integration tests (requires Docker)
 make test-integration
 
-# Run e2e tests: real CLI against throwaway Vault containers (requires Docker)
+# Run e2e tests: real CLI against throwaway Vault and k3s containers (requires Docker)
 make test-e2e
 ```
 

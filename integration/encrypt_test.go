@@ -91,3 +91,45 @@ func TestRemovedCommandsAreGone(t *testing.T) {
 		}
 	}
 }
+
+// A fresh clone has the committed .enc files but not the gitignored key.
+// Every command must fail and point at the missing key instead of quietly
+// generating a new one, which would encrypt new files with a different key.
+func TestMissingKeyIsReportedNotRegenerated(t *testing.T) {
+	for _, method := range []string{"aes", "gpg"} {
+		t.Run(method, func(t *testing.T) {
+			dir := newProject(t)
+			stdout, stderr, code := runPenhan(t, dir, "add", "clone", "--encryption="+method, "--backend=file")
+			if code != 0 {
+				t.Fatalf("add failed: code=%d stderr=%s stdout=%s", code, stderr, stdout)
+			}
+			s := safe{Dir: filepath.Join(dir, "clone"), Name: "clone"}
+			writeSecret(t, s, "db.yaml", "k: v\n")
+			if _, stderr, code := runPenhan(t, s.Dir, "encrypt"); code != 0 {
+				t.Fatalf("encrypt failed: %s", stderr)
+			}
+
+			keyPath := filepath.Join(s.Dir, ".penhan", "keys", method+".key")
+			if err := os.Remove(keyPath); err != nil {
+				t.Fatal(err)
+			}
+			writeSecret(t, s, "new.yaml", "k: new\n")
+
+			for _, cmd := range []string{"encrypt", "decrypt", "check", "push"} {
+				stdout, stderr, code := runPenhan(t, s.Dir, cmd)
+				if code == 0 {
+					t.Errorf("%s must fail without the key: %s", cmd, stdout)
+				}
+				if !strings.Contains(stderr, "key not found") {
+					t.Errorf("%s error should name the missing key, got: %s", cmd, stderr)
+				}
+			}
+			if _, err := os.Stat(keyPath); !os.IsNotExist(err) {
+				t.Error("no command may generate a replacement key")
+			}
+			if !fileExists(t, s, "secrets/new.yaml") {
+				t.Error("the new plaintext must be left untouched")
+			}
+		})
+	}
+}

@@ -8,13 +8,16 @@ import (
 )
 
 type InitAnswers struct {
-	SafeName       string
-	Encryption     string
-	GitHubUsername string
-	Backend        string
-	VaultAddr      string
-	VaultToken     string
-	RemoteDir      string
+	SafeName   string
+	Encryption string
+	Backend    string
+	VaultAddr  string
+	VaultToken string
+	RemoteDir  string
+
+	Kubeconfig    string
+	KubeContext   string
+	KubeNamespace string
 }
 
 var safeNamePattern = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
@@ -40,25 +43,9 @@ func RunInitPrompts(partial *InitAnswers) (*InitAnswers, error) {
 			Title("Encryption method").
 			Options(
 				huh.NewOption("GPG", "gpg"),
-				huh.NewOption("GitHub GPG (seal-only)", "github-gpg"),
 				huh.NewOption("AES", "aes"),
 			)
 		if err := encSelect.Value(&answers.Encryption).Run(); err != nil {
-			return nil, err
-		}
-	}
-
-	if answers.Encryption == "github-gpg" && answers.GitHubUsername == "" {
-		userInput := huh.NewInput().
-			Title("GitHub username").
-			Placeholder("your-github-username").
-			Validate(func(s string) error {
-				if s == "" {
-					return fmt.Errorf("github username is required")
-				}
-				return nil
-			})
-		if err := userInput.Value(&answers.GitHubUsername).Run(); err != nil {
 			return nil, err
 		}
 	}
@@ -69,6 +56,7 @@ func RunInitPrompts(partial *InitAnswers) (*InitAnswers, error) {
 			Options(
 				huh.NewOption("Vault", "vault"),
 				huh.NewOption("File (encrypted on disk, git-committed)", "file"),
+				huh.NewOption("Kubernetes (Secrets in a cluster namespace)", "kubernetes"),
 			)
 		if err := beSelect.Value(&answers.Backend).Run(); err != nil {
 			return nil, err
@@ -107,5 +95,38 @@ func RunInitPrompts(partial *InitAnswers) (*InitAnswers, error) {
 		}
 	}
 
+	if answers.Backend == "kubernetes" && answers.KubeNamespace == "" {
+		nsInput := huh.NewInput().
+			Title("Kubernetes namespace").
+			Placeholder("default").
+			Validate(func(s string) error {
+				if s == "" {
+					return fmt.Errorf("namespace is required")
+				}
+				return nil
+			})
+		if err := nsInput.Value(&answers.KubeNamespace).Run(); err != nil {
+			return nil, err
+		}
+	}
+
 	return &answers, nil
+}
+
+// SelectKubeContext asks which kubeconfig context the safe should push to,
+// with current preselected.
+func SelectKubeContext(contexts []string, current string) (string, error) {
+	choice := current
+	options := make([]huh.Option[string], 0, len(contexts))
+	for _, c := range contexts {
+		options = append(options, huh.NewOption(c, c))
+	}
+	sel := huh.NewSelect[string]().
+		Title("Kubernetes context").
+		Description("Recorded in penhan.yaml, so pushes always target this cluster").
+		Options(options...)
+	if err := sel.Value(&choice).Run(); err != nil {
+		return "", err
+	}
+	return choice, nil
 }

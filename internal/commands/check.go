@@ -45,12 +45,7 @@ func init() {
 }
 
 func runCheck(cmd *cobra.Command, args []string) error {
-	cfg, err := loadSafeConfig()
-	if err != nil {
-		return err
-	}
-
-	provider, err := newCryptoProvider(cfg)
+	cfg, provider, err := openSafe()
 	if err != nil {
 		return err
 	}

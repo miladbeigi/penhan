@@ -4,56 +4,43 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path"
 	"strings"
 
 	vault "github.com/hashicorp/vault/api"
 )
 
+// VaultOptions configures a VaultProvider.
+type VaultOptions struct {
+	Addr      string
+	Token     string
+	MountPath string // KV v2 mount, e.g. "secret"
+	BasePath  string // prefix under the mount, normally the safe name
+}
+
+// VaultProvider stores secrets in a HashiCorp Vault KV v2 mount.
 type VaultProvider struct {
 	client    *vault.Client
-	addr      string
-	token     string
 	mountPath string
 	basePath  string
 }
 
-func NewVaultProvider() *VaultProvider {
-	return &VaultProvider{}
-}
-
-func (p *VaultProvider) Setup(opts SetupOptions) error {
-	p.addr = opts.Addr
-	p.token = opts.Token
-	p.mountPath = opts.MountPath
-	p.basePath = opts.BasePath
-
+func NewVaultProvider(opts VaultOptions) (*VaultProvider, error) {
 	config := vault.DefaultConfig()
 	config.Address = opts.Addr
 
 	client, err := vault.NewClient(config)
 	if err != nil {
-		return fmt.Errorf("create vault client: %w", err)
+		return nil, fmt.Errorf("create vault client: %w", err)
 	}
-
 	client.SetToken(opts.Token)
-	p.client = client
 
-	return nil
-}
-
-func (p *VaultProvider) IsInitialized() bool {
-	return p.client != nil
+	return &VaultProvider{client: client, mountPath: opts.MountPath, basePath: opts.BasePath}, nil
 }
 
 func (p *VaultProvider) Push(content []byte, remotePath string) error {
-	if !p.IsInitialized() {
-		return fmt.Errorf("vault provider not initialized")
-	}
-
 	fullPath := p.buildPath(remotePath)
 
-	data := make(map[string]interface{})
+	var data map[string]interface{}
 	if err := json.Unmarshal(content, &data); err != nil {
 		return fmt.Errorf("unmarshal secret data: %w", err)
 	}
@@ -71,10 +58,6 @@ func (p *VaultProvider) Push(content []byte, remotePath string) error {
 }
 
 func (p *VaultProvider) Pull(remotePath string) ([]byte, error) {
-	if !p.IsInitialized() {
-		return nil, fmt.Errorf("vault provider not initialized")
-	}
-
 	fullPath := p.buildPath(remotePath)
 
 	secret, err := p.client.Logical().ReadWithContext(context.TODO(), fullPath)
@@ -100,75 +83,9 @@ func (p *VaultProvider) Pull(remotePath string) ([]byte, error) {
 	return content, nil
 }
 
-// List returns every secret under remotePath, recursing into KV v2 folders so
-// nested paths like "apps/api-token" are returned in full, never as bare
-// folder names.
-func (p *VaultProvider) List(remotePath string) ([]string, error) {
-	if !p.IsInitialized() {
-		return nil, fmt.Errorf("vault provider not initialized")
-	}
-
-	// KV v2 only supports LIST on the metadata path, not the data path.
-	fullPath := p.buildPathWithPrefix("metadata", remotePath)
-	if !strings.HasSuffix(fullPath, "/") {
-		fullPath += "/"
-	}
-
-	secret, err := p.client.Logical().ListWithContext(context.TODO(), fullPath)
-	if err != nil {
-		return nil, fmt.Errorf("list vault secrets: %w", err)
-	}
-
-	if secret == nil || secret.Data == nil {
-		return []string{}, nil
-	}
-
-	keys, ok := secret.Data["keys"].([]interface{})
-	if !ok {
-		return []string{}, nil
-	}
-
-	paths := []string{}
-	for _, key := range keys {
-		k, ok := key.(string)
-		if !ok {
-			continue
-		}
-		if strings.HasSuffix(k, "/") {
-			sub, err := p.List(path.Join(remotePath, strings.TrimSuffix(k, "/")))
-			if err != nil {
-				return nil, err
-			}
-			paths = append(paths, sub...)
-			continue
-		}
-		paths = append(paths, path.Join(remotePath, k))
-	}
-
-	return paths, nil
-}
-
-func (p *VaultProvider) Delete(remotePath string) error {
-	if !p.IsInitialized() {
-		return fmt.Errorf("vault provider not initialized")
-	}
-
-	fullPath := p.buildPath(remotePath)
-
-	_, err := p.client.Logical().DeleteWithContext(context.TODO(), fullPath)
-	if err != nil {
-		return fmt.Errorf("delete from vault: %w", err)
-	}
-
-	return nil
-}
-
+// buildPath returns the KV v2 data path: {mount}/data/{base}/{path}.
 func (p *VaultProvider) buildPath(remotePath string) string {
-	return p.buildPathWithPrefix("data", remotePath)
-}
-
-func (p *VaultProvider) buildPathWithPrefix(prefix, remotePath string) string {
-	parts := []string{p.mountPath, prefix}
+	parts := []string{p.mountPath, "data"}
 	if p.basePath != "" {
 		parts = append(parts, p.basePath)
 	}

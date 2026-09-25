@@ -26,77 +26,60 @@ func loadSafeConfig() (*config.Config, error) {
 	return cfg, err
 }
 
-// newCryptoProvider builds and initializes the encryption provider from config.
-func newCryptoProvider(cfg *config.Config) (crypto.Provider, error) {
-	switch cfg.Encryption.Method {
-	case "gpg":
-		provider := crypto.NewGPGProvider()
-		if err := provider.Setup(cfg.Encryption.GPG.KeyPath, ""); err != nil {
-			return nil, err
-		}
-		return provider, nil
-	case "github-gpg":
-		provider := crypto.NewGitHubGPGProvider()
-		if err := provider.Setup(cfg.Encryption.GPG.KeyPath, cfg.Encryption.GPG.GitHubUsername); err != nil {
-			return nil, err
-		}
-		return provider, nil
-	case "aes":
-		provider := crypto.NewAESProvider()
-		if err := provider.Setup(cfg.Encryption.AES.KeyPath, ""); err != nil {
-			return nil, err
-		}
-		return provider, nil
-	default:
-		return nil, fmt.Errorf("unsupported encryption method: %s", cfg.Encryption.Method)
+// openSafe loads the safe in the current directory and its encryption key.
+func openSafe() (*config.Config, crypto.Provider, error) {
+	cfg, err := loadSafeConfig()
+	if err != nil {
+		return nil, nil, err
 	}
+	provider, err := loadCryptoProvider(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cfg, provider, nil
 }
 
-// newBackend builds and initializes the configured backend provider.
+// loadCryptoProvider loads the safe's encryption key. It never generates
+// one: only `penhan add` creates keys.
+func loadCryptoProvider(cfg *config.Config) (crypto.Provider, error) {
+	return crypto.Load(cfg.Encryption.Method, cfg.Encryption.KeyPath())
+}
+
+// newBackend builds the configured backend provider.
 func newBackend(cfg *config.Config, provider crypto.Provider) (backends.Provider, error) {
 	switch cfg.Backend.Type {
-	case "", "vault":
+	case "", backends.TypeVault:
 		return newVaultBackend(cfg)
-	case "file":
-		return newFileBackend(cfg, provider)
+	case backends.TypeFile:
+		dir := cfg.Backend.File.Path
+		if dir == "" {
+			dir = defaultRemoteDir
+		}
+		return backends.NewFileProvider(dir, provider)
+	case backends.TypeKubernetes:
+		k := cfg.Backend.Kubernetes
+		return backends.NewKubernetesProvider(backends.KubernetesOptions{
+			Kubeconfig: k.Kubeconfig,
+			Context:    k.Context,
+			Namespace:  k.Namespace,
+			Safe:       k.Safe,
+		})
 	default:
-		return nil, fmt.Errorf("unsupported backend type: %s", cfg.Backend.Type)
+		return nil, fmt.Errorf("unsupported backend type: %q", cfg.Backend.Type)
 	}
 }
 
 func newVaultBackend(cfg *config.Config) (*backends.VaultProvider, error) {
-	backend := backends.NewVaultProvider()
 	token, err := os.ReadFile(cfg.Backend.Vault.TokenPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read vault token: %w", err)
 	}
-	if err := backend.Setup(backends.SetupOptions{
+	return backends.NewVaultProvider(backends.VaultOptions{
 		Addr:      cfg.Backend.Vault.Addr,
 		Token:     strings.TrimSpace(string(token)),
 		MountPath: cfg.Backend.Vault.MountPath,
 		BasePath:  cfg.Backend.Vault.BasePath,
-	}); err != nil {
-		return nil, err
-	}
-	return backend, nil
-}
-
-func newFileBackend(cfg *config.Config, provider crypto.Provider) (*backends.FileProvider, error) {
-	dir := cfg.Backend.File.Path
-	if dir == "" {
-		dir = ".penhan/remote"
-	}
-
-	backend := backends.NewFileProvider()
-	if err := backend.Setup(backends.SetupOptions{Dir: dir, Enc: provider}); err != nil {
-		return nil, err
-	}
-
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("create remote directory: %w", err)
-	}
-
-	return backend, nil
+	})
 }
 
 // localSecret is one secret file found under the secrets directory, with its
@@ -123,17 +106,14 @@ func collectLocalSecrets(cfg *config.Config, provider crypto.Provider) ([]localS
 			return nil
 		}
 
-		name := path
-		isEnc := strings.HasSuffix(name, ".enc")
-		if isEnc {
-			name = strings.TrimSuffix(name, ".enc")
-		}
-		ext := filepath.Ext(name)
-		if ext != ".yaml" && ext != ".yml" && ext != ".json" {
+		if !secrets.IsSecretFile(path) {
 			return nil
 		}
+		name := strings.TrimSuffix(path, ".enc")
+		isEnc := name != path
+		ext := filepath.Ext(name)
 
-		remotePath := secrets.LocalToVault(name, cfg.Secrets.Path)
+		remotePath := secrets.RemotePath(name, cfg.Secrets.Path)
 		if _, seen := byPath[remotePath]; seen && isEnc {
 			return nil
 		}
@@ -143,10 +123,6 @@ func collectLocalSecrets(cfg *config.Config, provider crypto.Provider) ([]localS
 			return err
 		}
 		if isEnc {
-			if provider.SealOnly() {
-				fmt.Fprintf(os.Stderr, "  Skipping %s (encrypted, no plaintext available for seal-only provider)\n", remotePath)
-				return nil
-			}
 			if data, err = provider.Decrypt(data); err != nil {
 				return fmt.Errorf("decrypt %s: %w", path, err)
 			}

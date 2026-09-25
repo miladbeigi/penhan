@@ -17,7 +17,7 @@ func TestMultipleSafesIsolateBasePaths(t *testing.T) {
 	for _, name := range []string{"alpha", "beta"} {
 		safe := addSafe(t, dir, name, vault)
 		writeFile(t, safe, "secrets/db.yaml", "owner: "+name+"\n")
-		stdout, stderr, code := run(t, safe, "", "push")
+		stdout, stderr, code := run(t, safe, "push")
 		requireSuccess(t, "push in "+name, stdout, stderr, code)
 	}
 
@@ -39,7 +39,7 @@ func TestAddTokenFlagVariations(t *testing.T) {
 
 	t.Run("vault_token_flag", func(t *testing.T) {
 		dir := newProject(t)
-		stdout, stderr, code := run(t, dir, "", "add", "flag",
+		stdout, stderr, code := run(t, dir, "add", "flag",
 			"--encryption=aes",
 			"--backend=vault",
 			"--vault-addr="+vault.addr,
@@ -62,7 +62,7 @@ func assertPushWorks(t *testing.T, safe string) {
 	t.Helper()
 	requireFile(t, safe, ".penhan/vault-token")
 	writeFile(t, safe, "secrets/auth.yaml", "key: value\n")
-	stdout, stderr, code := run(t, safe, "", "push")
+	stdout, stderr, code := run(t, safe, "push")
 	requireSuccess(t, "push", stdout, stderr, code)
 	requireContains(t, "push", stdout, "Push complete")
 }
@@ -71,7 +71,7 @@ func assertPushWorks(t *testing.T, safe string) {
 // instead of a hung prompt.
 func TestAddNonInteractiveRequiresFlags(t *testing.T) {
 	dir := newProject(t)
-	stdout, stderr, code := run(t, dir, "", "add")
+	stdout, stderr, code := run(t, dir, "add")
 	if code == 0 {
 		t.Fatalf("add without flags on a pipe must fail:\n%s", stdout)
 	}
