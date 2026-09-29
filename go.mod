@@ -3,7 +3,7 @@ module github.com/miladbeigi/penhan
 go 1.26.5
 
 require (
-	github.com/ProtonMail/go-crypto v1.5.1
+	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/charmbracelet/huh v1.0.0
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/hashicorp/vault/api v1.23.0
