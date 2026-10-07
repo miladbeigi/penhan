@@ -40,9 +40,26 @@ func openSafe() (*config.Config, crypto.Provider, error) {
 }
 
 // loadCryptoProvider loads the safe's encryption key. It never generates
-// one: only `penhan add` creates keys.
+// one: only `penhan add` creates keys. A local plaintext key wins; without
+// one, the committed wrapped key is unwrapped with the project master key.
 func loadCryptoProvider(cfg *config.Config) (crypto.Provider, error) {
-	return crypto.Load(cfg.Encryption.Method, cfg.Encryption.KeyPath())
+	method := cfg.Encryption.Method
+	provider, err := crypto.Load(method, cfg.Encryption.KeyPath())
+	if !errors.Is(err, crypto.ErrKeyNotFound) {
+		return provider, err
+	}
+	wrapped, rerr := os.ReadFile(wrappedKeyPath(method))
+	if errors.Is(rerr, os.ErrNotExist) {
+		return nil, err
+	}
+	if rerr != nil {
+		return nil, rerr
+	}
+	key, uerr := unwrapSafeKey(".", wrapped)
+	if uerr != nil {
+		return nil, fmt.Errorf("%s: %w", wrappedKeyPath(method), uerr)
+	}
+	return crypto.New(method, key)
 }
 
 // newBackend builds the configured backend provider.

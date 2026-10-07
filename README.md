@@ -24,6 +24,7 @@ Penhan is a small CLI for teams that want Git to be the source of truth for thei
 ## ✨ Features
 
 - 🔒 **Encrypted at rest in Git**: AES-256-GCM or OpenPGP, with keys generated locally per safe. Plaintext and keys are gitignored automatically.
+- 🔑 **Keys shared through GitHub SSH keys**: an optional master key wraps every safe key so it can be committed; teammates unlock it with the SSH key already on their GitHub account.
 - 🔌 **Multiple backends**: HashiCorp Vault KV v2, Kubernetes Secrets, or an encrypted directory.
 - 🎯 **Changes only**: `check` shows what differs from the backend; `push` writes only new and changed secrets.
 - 🛡️ **Safe by default**: pins the Kubernetes context, never overwrites resources it doesn't own, never regenerates a missing key, and keeps secret values byte for byte.
@@ -95,6 +96,7 @@ Run `penhan add` without flags for an interactive setup. See [Getting started](d
 | [Commands](docs/commands.md) | Reference for every command and flag |
 | [Configuration](docs/configuration.md) | The `penhan.yaml` file |
 | [Encryption and keys](docs/encryption.md) | AES and GPG, key handling, and what is committed |
+| [Master key](docs/master-key.md) | Commit safe keys, unlock them with your GitHub SSH key |
 | [Vault backend](docs/backends/vault.md) | HashiCorp Vault KV v2 |
 | [Kubernetes backend](docs/backends/kubernetes.md) | Secrets in a namespace, importing existing ones, guardrails |
 | [File backend](docs/backends/file.md) | An encrypted directory |
