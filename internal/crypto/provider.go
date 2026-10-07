@@ -64,10 +64,20 @@ func Load(method, keyPath string) (Provider, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read %s key: %w", method, err)
 	}
-	if method == MethodGPG {
+	return New(method, key)
+}
+
+// New builds a provider for method from the raw key bytes, as stored in a
+// key file.
+func New(method string, key []byte) (Provider, error) {
+	switch method {
+	case MethodGPG:
 		return newGPG(key)
+	case MethodAES:
+		return newAES(key)
+	default:
+		return nil, unsupported(method)
 	}
-	return newAES(key)
 }
 
 func unsupported(method string) error {

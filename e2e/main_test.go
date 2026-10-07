@@ -192,10 +192,19 @@ func addSafe(t *testing.T, dir, name string, v vaultEnv) string {
 // deterministic non-TTY mode a script would get.
 func run(t *testing.T, dir string, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
+	return runEnv(t, dir, nil, args...)
+}
+
+// runEnv is run with extra environment variables (KEY=value).
+func runEnv(t *testing.T, dir string, env []string, args ...string) (stdout, stderr string, exitCode int) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, penhanBinary, args...)
 	cmd.Dir = dir
+	if env != nil {
+		cmd.Env = append(os.Environ(), env...)
+	}
 	cmd.Stdin = strings.NewReader("")
 	var outBuf, errBuf safeBuffer
 	cmd.Stdout = &outBuf

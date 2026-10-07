@@ -1,6 +1,6 @@
 # Commands
 
-All commands except `add`, `update`, and `version` run inside a safe directory, the one containing `penhan.yaml`.
+All commands except `add`, `access`, `unlock`, `update`, and `version` run inside a safe directory, the one containing `penhan.yaml`.
 
 | Command | Purpose |
 |---|---|
@@ -10,6 +10,9 @@ All commands except `add`, `update`, and `version` run inside a safe directory, 
 | [`check`](#penhan-check) | Compare local secrets with the backend |
 | [`push`](#penhan-push) | Write new and changed secrets to the backend |
 | [`import`](#penhan-import) | Bring existing Kubernetes Secrets into a safe |
+| [`access`](#penhan-access) | Share the master key through GitHub SSH keys |
+| [`unlock`](#penhan-unlock) | Decrypt the master key with your SSH key |
+| [`wrap`](#penhan-wrap) | Encrypt safe keys with the master key so they can be committed |
 | [`update`](#penhan-update) | Update Penhan to the latest release |
 | [`version`](#penhan-version) | Print version information |
 
@@ -78,6 +81,36 @@ penhan import [secret]... [--all]
 ```
 
 Kubernetes backend only. With no arguments, lists every Secret in the safe's namespace as `ready`, `present` (already in the safe), or `skip` with the reason, and changes nothing. With names, or `--all` for everything that's ready, it writes each Secret to an encrypted `secrets/<name>.yaml.enc` and marks the Secret as managed by the safe. The Secret's data is not changed. See [Importing existing Secrets](backends/kubernetes.md#importing-existing-secrets).
+
+## `penhan access`
+
+```
+penhan access grant <github-user> [--key SHA256:...] [--yes]
+penhan access revoke <github-user>
+penhan access list
+```
+
+Manages who can unlock the project's master key. Run it at the project root. See [Sharing keys with a master key](master-key.md).
+
+- `grant` fetches the user's SSH keys from GitHub, pins them in `.penhan/access.yaml`, and re-encrypts `.penhan/master.age`. The first grant creates the master key. `--key` limits the grant to the given fingerprints. If the user's keys changed since they were pinned, `grant` shows the change and asks first; `--yes` accepts it without asking.
+- `revoke` removes the user, rotates the master key, and re-wraps every safe key with the new one.
+- `list` shows each user's pinned keys, marking the ones on this machine.
+
+## `penhan unlock`
+
+```
+penhan unlock [--identity <private key>]...
+```
+
+Decrypts `.penhan/master.age` with your SSH private key and saves the master key to `.penhan/master.key` (gitignored). Works anywhere in the project. By default it uses the key pairs in `~/.ssh`.
+
+## `penhan wrap`
+
+```
+penhan wrap
+```
+
+Encrypts a safe's key with the master key into `.penhan/<method>.key.enc`, to be committed. Inside a safe it wraps that safe; at the project root it wraps every safe. Safes that are already wrapped are left alone. `penhan add` does this automatically once a master key exists.
 
 ## `penhan update`
 

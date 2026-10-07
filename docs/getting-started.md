@@ -95,6 +95,13 @@ penhan check
 
 Without the key, every command stops with `encryption key not found` rather than creating a new key that couldn't decrypt the existing files. Share keys through a password manager or another channel outside Git. See [Encryption and keys](encryption.md).
 
+To skip copying keys, give the project a [master key](master-key.md). Safe keys are then committed encrypted, and each person unlocks them with an SSH key from their GitHub account:
+
+```bash
+penhan access grant alice   # once, by someone with access
+penhan unlock               # on Alice's machine, after pulling
+```
+
 For a Vault safe, each person also needs a token at `.penhan/vault-token`. For a Kubernetes safe, Penhan uses their kubeconfig.
 
 ## Next steps

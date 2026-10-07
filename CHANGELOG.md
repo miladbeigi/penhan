@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-06
+
+### Added
+
+- A project master key, so safe keys no longer have to be copied between machines by hand. Each safe's key is encrypted with the master key into `.penhan/<method>.key.enc` and committed. The master key is encrypted with [age](https://age-encryption.org) to the GitHub SSH keys of everyone with access and committed as `.penhan/master.age`. See [Sharing keys with a master key](docs/master-key.md).
+  - `penhan access grant <github-user>` fetches the user's keys from `github.com/<user>.keys`, pins their fingerprints in `.penhan/access.yaml`, and re-encrypts the master key. The first grant creates the master key. Changed keys on a re-grant are shown and must be confirmed (`--yes` in scripts). `--key` limits a grant to specific keys.
+  - `penhan access revoke <github-user>` removes a user and rotates the master key, re-wrapping every safe key.
+  - `penhan access list` shows who has access.
+  - `penhan unlock` decrypts the master key with a key pair from `~/.ssh` (or `--identity`) into the gitignored `.penhan/master.key`. Only the matching private key is read, so it asks for at most one passphrase.
+  - `penhan wrap` wraps existing safe keys: one safe, or every safe when run at the project root. `penhan add` wraps new safes automatically, and refuses to create a safe while the master key is locked.
+  - `check`, `push`, `encrypt`, `decrypt`, and `import` use the wrapped key when there is no plaintext key in `.penhan/keys/`. CI can supply the master key in `PENHAN_MASTER_KEY`.
+  - Supported SSH keys are `ssh-ed25519` and `ssh-rsa`. ECDSA keys, security keys (`sk-*`), and keys only available through `ssh-agent` can't be used.
+
 ### Fixed
 
 - `penhan version` reported `dev` for binaries installed with `go install github.com/miladbeigi/penhan/cmd/penhan@vX.Y.Z`, so `penhan update` treated them as development builds. The version Go records in the binary is now used.

@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/x/term"
+	"github.com/miladbeigi/penhan/internal/access"
 	"github.com/miladbeigi/penhan/internal/backends"
 	"github.com/miladbeigi/penhan/internal/config"
 	"github.com/miladbeigi/penhan/internal/crypto"
@@ -224,6 +225,13 @@ func resolveKubeContext(kubeconfig, requested string) (string, error) {
 // createSafe builds the safe directory: penhan.yaml, the secrets directory,
 // the encryption key, backend credentials, and .gitignore entries.
 func createSafe(answers *prompt.InitAnswers) (retErr error) {
+	// In a project with a master key, the new key is wrapped right away so
+	// it can be committed; refuse up front if the master key is locked.
+	master, err := access.LoadMaster(".")
+	if err != nil {
+		return err
+	}
+
 	dir := answers.SafeName
 	penhanPath := filepath.Join(dir, "penhan.yaml")
 	if _, err := os.Stat(penhanPath); err == nil {
@@ -288,6 +296,12 @@ func createSafe(answers *prompt.InitAnswers) (retErr error) {
 
 	fmt.Printf("✓ Created safe %s\n", dir)
 	fmt.Printf("✓ Generated %s key at %s\n", strings.ToUpper(method), absKeyPath)
+	if master != nil {
+		if _, err := wrapSafe(dir, master); err != nil {
+			return fmt.Errorf("wrap key: %w", err)
+		}
+		fmt.Printf("✓ Wrapped the key with the master key into %s (commit it)\n", filepath.Join(dir, wrappedKeyPath(method)))
+	}
 	fmt.Printf("✓ Created %s\n", penhanPath)
 
 	if err := appendGitignore(gitignoreEntries(dir, answers.Backend)); err != nil {
@@ -356,7 +370,11 @@ func buildBackendConfig(answers *prompt.InitAnswers) config.BackendConfig {
 // It creates the file if it does not exist, and appends missing entries
 // to an existing file without duplicating lines that are already there.
 func appendGitignore(entries []string) error {
-	const path = ".gitignore"
+	return appendGitignoreAt(".gitignore", entries)
+}
+
+// appendGitignoreAt is appendGitignore for the .gitignore at path.
+func appendGitignoreAt(path string, entries []string) error {
 
 	var existing map[string]bool
 	data, err := os.ReadFile(path)
