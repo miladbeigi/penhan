@@ -79,6 +79,12 @@ func runWrap(cmd *cobra.Command, args []string) error {
 	}
 	for _, safe := range safes {
 		msg, err := wrapSafe(safe, master)
+		// At the project root, a safe whose key is on another machine is
+		// skipped rather than blocking the others.
+		if len(safes) > 1 && errors.Is(err, crypto.ErrKeyNotFound) {
+			fmt.Printf("· skipped %s: its key isn't on this machine; run `penhan wrap` in it where the key is\n", safe)
+			continue
+		}
 		if err != nil {
 			return fmt.Errorf("%s: %w", safe, err)
 		}

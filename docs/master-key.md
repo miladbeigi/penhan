@@ -26,7 +26,7 @@ git commit -m "Share safe keys through the master key"
 
 `grant` encrypts to **all** your SSH keys on GitHub, so any of your machines can unlock it. Pass `--key SHA256:...` (repeatable) to limit it to specific keys.
 
-`wrap` needs the plaintext key of each safe it wraps. If a safe's key is on another machine, run `penhan unlock` and `penhan wrap` there too.
+`wrap` needs the plaintext key of each safe it wraps. At the root it skips safes whose key is on another machine; run `penhan unlock` and `penhan wrap` there too.
 
 Once the master key exists, `penhan add` wraps new safe keys automatically. If the master key isn't unlocked on that machine, `add` stops and asks you to run `penhan unlock` first, so new safes can't be created with keys that aren't shared.
 

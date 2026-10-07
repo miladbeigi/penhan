@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-06
+
+### Fixed
+
+- `penhan wrap` at the project root stopped at the first safe whose key wasn't on this machine, leaving the remaining safes unwrapped. It now skips those safes with a note and wraps the rest.
+
 ## [0.7.0] - 2026-10-06
 
 ### Added
