@@ -317,3 +317,33 @@ func copyFiles(t *testing.T, from, to string, rels ...string) {
 		}
 	}
 }
+
+// At the project root, a safe whose key lives on another machine doesn't
+// stop the others from being wrapped.
+func TestWrapAtRootSkipsSafesWithoutKey(t *testing.T) {
+	t.Setenv(access.EnvMasterKey, "")
+	m := newMachine(t)
+	m.use(t)
+	fakeGitHub(t, map[string][]access.Key{"milad": {m.key}})
+	root := t.TempDir()
+	a := addFileSafe(t, root, "a")
+	b := addFileSafe(t, root, "b")
+	c := addFileSafe(t, root, "c")
+	if err := os.Remove(filepath.Join(b, ".penhan", "keys", "aes.key")); err != nil {
+		t.Fatal(err)
+	}
+	if err := penhan(t, root, "access", "grant", "milad"); err != nil {
+		t.Fatal(err)
+	}
+	if err := penhan(t, root, "wrap"); err != nil {
+		t.Fatal(err)
+	}
+	for _, safe := range []string{a, c} {
+		if _, err := os.Stat(filepath.Join(safe, ".penhan", "aes.key.enc")); err != nil {
+			t.Errorf("%s should be wrapped: %v", safe, err)
+		}
+	}
+	if err := penhan(t, b, "wrap"); err == nil {
+		t.Error("wrap inside a safe without its key must fail")
+	}
+}
