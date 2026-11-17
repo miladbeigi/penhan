@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/demo/demo.gif" alt="Penhan demo: create a safe, encrypt a secret, push it to Vault" width="800">
+  <img src="docs/demo/demo.gif" alt="Penhan demo: create a safe, encrypt a secret, push it to Vault, then share its key through a master key and unlock it on a fresh clone" width="800">
 </p>
 
 Penhan is a small CLI for teams that want Git to be the source of truth for their secrets. Secrets live in your repository as encrypted files, reviewed and versioned like code. Penhan decrypts them locally and pushes them to the backend your applications read from.

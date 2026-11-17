@@ -63,7 +63,7 @@ tidy: ## Check go mod tidy
 	@git diff --exit-code go.mod
 	@test ! -f go.sum || git diff --exit-code go.sum
 
-demo: ## Re-record the README demo GIF (requires vhs and Docker)
+demo: ## Re-record the README demo GIF (requires vhs, Docker, ssh-keygen and python3)
 	vhs docs/demo/demo.tape
 
 release: ## Run GoReleaser to create a release
