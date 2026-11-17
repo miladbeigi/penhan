@@ -50,6 +50,8 @@ flowchart LR
 
 A project holds one or more **safes**. Each safe is a directory with its own `penhan.yaml`, encryption key, and backend settings, so one repository can manage secrets for several apps, environments, or namespaces.
 
+Safe keys stay on the machine that created them unless you give the project a [master key](docs/master-key.md). It wraps each safe key so the encrypted copy can be committed, and teammates unlock it on a fresh clone with `penhan unlock`, using the SSH key on their GitHub account.
+
 ## 📦 Install
 
 **Prebuilt binary** (macOS and Linux, amd64 and arm64):

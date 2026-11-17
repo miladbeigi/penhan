@@ -110,7 +110,7 @@ Decrypts `.penhan/master.age` with your SSH private key and saves the master key
 penhan wrap
 ```
 
-Encrypts a safe's key with the master key into `.penhan/<method>.key.enc`, to be committed. Inside a safe it wraps that safe; at the project root it wraps every safe. Safes that are already wrapped are left alone. `penhan add` does this automatically once a master key exists.
+Encrypts a safe's key with the master key into `.penhan/<method>.key.enc`, to be committed. Inside a safe it wraps that safe; at the project root it wraps every safe, skipping with a note any safe whose key isn't on this machine (run `penhan wrap` again where that key is). Safes that are already wrapped are left alone. `penhan add` does this automatically once a master key exists.
 
 ## `penhan update`
 
