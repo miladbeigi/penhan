@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <a href="https://penhan.miladapps.com">penhan.miladapps.com</a>
+  <a href="https://milad.cloud/penhan/">milad.cloud/penhan</a>
 </p>
 
 <p align="center">
